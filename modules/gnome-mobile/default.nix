@@ -135,9 +135,12 @@ in {
   ];
 
   config = {
-    # Apply the GNOME Mobile overlay.
     nixpkgs.overlays = [
-      (import ../../overlays/gnome-mobile)
+      # Downgrade core GNOME packages first, then apply `gnome-mobile` overlay.
+      (lib.composeManyExtensions [
+        (import ../../overlays/gnome-48)
+        (import ../../overlays/gnome-mobile)
+      ])
     ];
 
     services.xserver = {
@@ -176,6 +179,21 @@ in {
       # Set GNOME as the default session.
       defaultSession = "gnome";
     };
+
+    # FIXME: The following fixes were added to get GDM to work after downgrading to GNOME 48 from 49.
+    # Remove them once we move to a proper GNOME 49-based mobile overlay. See also:
+    # https://github.com/NixOS/nixpkgs/commit/23a2bfcf8a4bc47d53273163cba84afa4f5f08f3.
+    #
+    # Configure GDM user with proper home directory.
+    # GDM 48 needs a writable home directory; without it, GDM fails with
+    # "Failed to set owner of /var/empty: Operation not permitted".
+    users.users.gdm = {
+      home = lib.mkForce "/run/gdm";
+    };
+    systemd.tmpfiles.rules = [
+      # Create GDM runtime directory with proper permissions.
+      "d /run/gdm 0755 gdm gdm -"
+    ];
 
     services.logind.settings.Login = {
       # Handle power button with custom behavior.

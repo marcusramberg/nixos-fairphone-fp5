@@ -17,38 +17,42 @@ final: prev: let
   };
 in {
   # Override GNOME Shell with mobile-optimized version.
-  gnome-shell = prev.gnome-shell.overrideAttrs (old: rec {
-    version = "48.mobile.0";
-    src = prev.fetchFromGitLab {
-      domain = "gitlab.gnome.org";
-      owner = "verdre";
-      repo = "gnome-shell-mobile";
-      rev = version;
-      hash = "sha256-Iu61qtK0j4OIWpuFjzx8v2G7H7jAbmSBpayuf2h5zUE=";
-      fetchSubmodules = true;
-    };
-    postPatch = ''
-      patchShebangs \
-        src/data-to-c.py \
-        meson/generate-app-list.py
+  gnome-shell =
+    (prev.gnome-shell.override {
+      # Use our own `mutter-mobile` instead of regular `mutter`.
+      mutter = final.mutter;
+    }).overrideAttrs (old: rec {
+      version = "48.mobile.0";
+      src = prev.fetchFromGitLab {
+        domain = "gitlab.gnome.org";
+        owner = "verdre";
+        repo = "gnome-shell-mobile";
+        rev = version;
+        hash = "sha256-Iu61qtK0j4OIWpuFjzx8v2G7H7jAbmSBpayuf2h5zUE=";
+        fetchSubmodules = true;
+      };
+      postPatch = ''
+        patchShebangs \
+          src/data-to-c.py \
+          meson/generate-app-list.py
 
-      # Don't generate manpage, we don't need it.
-      rm -f man/gnome-shell.1
+        # Don't generate manpage, we don't need it.
+        rm -f man/gnome-shell.1
 
-      ln -sf ${gvc} subprojects/gvc
-    '';
-    buildInputs =
-      old.buildInputs
-      ++ [
-        prev.modemmanager # `/org/gnome/shell/misc/modemManager.js`
-        prev.libgudev # `/org/gnome/gjs/modules/esm/gi.js`
-      ];
-    postFixup =
-      old.postFixup
-      + ''
-        wrapGApp $out/share/gnome-shell/org.gnome.Shell.SensorDaemon
+        ln -sf ${gvc} subprojects/gvc
       '';
-  });
+      buildInputs =
+        old.buildInputs
+        ++ [
+          prev.modemmanager # `/org/gnome/shell/misc/modemManager.js`
+          prev.libgudev # `/org/gnome/gjs/modules/esm/gi.js`
+        ];
+      postFixup =
+        old.postFixup
+        + ''
+          wrapGApp $out/share/gnome-shell/org.gnome.Shell.SensorDaemon
+        '';
+    });
 
   # Mobile-specific GNOME Settings Daemon package.
   gnome-settings-daemon-mobile = prev.gnome-settings-daemon.overrideAttrs (old: rec {
@@ -68,7 +72,7 @@ in {
       '';
   });
 
-  # Override Mutter with mobile-optimized version. This also ensures it uses the mobile GNOME Settings Daemon.
+  # Override `mutter` with mobile-optimized version. This also ensures it uses the mobile GNOME Settings Daemon.
   mutter =
     (prev.mutter.override {gnome-settings-daemon = final.gnome-settings-daemon-mobile;}).overrideAttrs
     (old: rec {
