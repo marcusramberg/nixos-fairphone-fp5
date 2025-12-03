@@ -158,8 +158,15 @@ in {
             "console=ttyGS0,115200"
           ]
           ++ [
+            # Hardware UART serial console.
             # See: https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/testing/device-fairphone-fp5/deviceinfo.
             "console=ttyMSM0,115200"
+
+            # Framebuffer console; makes boot messages visible on the phone's screen.
+            # This is listed last so it becomes the primary console (`/dev/console`).
+            # The DRM driver provides fbdev emulation (CONFIG_DRM_FBDEV_EMULATION=y in kernel),
+            # which creates the framebuffer device that `tty1` outputs to.
+            "console=tty1"
           ]
           # Add verbose logging options if enabled.
           ++ lib.optionals cfg.serial.verbose [
