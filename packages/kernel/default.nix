@@ -39,6 +39,10 @@
   # - CONFIG_NETFILTER_XT_MATCH_RECENT: Recent connections tracking.
   # - CONFIG_NETFILTER_XT_MATCH_STATE: Connection state matching.
   # - CONFIG_NETFILTER_XT_TARGET_LOG: Logging target for firewall rules.
+  #
+  # DisplayPort output over USB-C:
+  # - CONFIG_TYPEC_DP_ALTMODE: Required for DP Alt Mode over USB-C to work.
+  # - CONFIG_TYPEC_UCSI: Unchanged, as upstream already uses `=y`.
   configfile = stdenv.mkDerivation {
     name = "kernel-config";
     src = "${pmaportsSrc}/device/testing/linux-postmarketos-qcom-sc7280/config-postmarketos-qcom-sc7280.aarch64";
@@ -56,6 +60,7 @@
         -e 's/# CONFIG_NETFILTER_XT_MATCH_RECENT is not set/CONFIG_NETFILTER_XT_MATCH_RECENT=m/' \
         -e 's/# CONFIG_NETFILTER_XT_MATCH_STATE is not set/CONFIG_NETFILTER_XT_MATCH_STATE=m/' \
         -e 's/# CONFIG_NETFILTER_XT_TARGET_LOG is not set/CONFIG_NETFILTER_XT_TARGET_LOG=m/' \
+        -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
         $src > config
     '';
 
