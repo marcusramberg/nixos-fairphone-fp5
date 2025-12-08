@@ -131,7 +131,7 @@ in {
   };
 
   imports = [
-    ./dconf.nix
+    ../gui/dconf.nix
   ];
 
   config = {

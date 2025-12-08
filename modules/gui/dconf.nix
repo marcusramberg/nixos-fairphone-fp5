@@ -4,17 +4,17 @@
   pkgs,
   ...
 }: let
-  cfg = config.nixos-fairphone-fp5.gnome-mobile;
+  cfg = config.nixos-fairphone-fp5.gui.dconf;
 in {
-  options.nixos-fairphone-fp5.gnome-mobile = {
+  options.nixos-fairphone-fp5.gui.dconf = {
     defaultWallpaper = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
         description = ''
-          Enable to set a custom default wallpaper for GNOME.
+          Enable to set a custom default wallpaper.
 
-          Note: This can still be changed by the user later in GNOME settings.
+          Note: This can still be changed by the user later in settings.
         '';
       };
 
@@ -33,9 +33,9 @@ in {
       type = lib.types.enum ["default" "prefer-dark"];
       default = "default";
       description = ''
-        Default color scheme for GNOME (light or dark mode).
+        Default color scheme (light or dark mode).
 
-        Note: This can still be changed by the user later in GNOME settings.
+        Note: This can still be changed by the user later in settings.
       '';
     };
   };
