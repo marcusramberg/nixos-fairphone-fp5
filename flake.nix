@@ -192,6 +192,15 @@
 
       # NixOS modules for external consumption.
       nixosModules = {
+        gnome-mobile = {
+          imports = [
+            ./modules/bootmac
+            ./modules/hardware
+            ./modules/modem
+            ./modules/gnome-mobile
+          ];
+        };
+
         minimal = {
           imports = [
             ./modules/bootmac
@@ -200,12 +209,12 @@
           ];
         };
 
-        gnome-mobile = {
+        phosh = {
           imports = [
             ./modules/bootmac
             ./modules/hardware
             ./modules/modem
-            ./modules/gnome-mobile
+            ./modules/phosh
           ];
         };
 
