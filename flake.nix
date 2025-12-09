@@ -170,6 +170,12 @@
           modules = [./hosts/minimal];
           pkgs = exampleConfigPkgs;
         };
+        phosh = nixpkgs.lib.nixosSystem {
+          inherit system;
+
+          modules = [./hosts/phosh];
+          pkgs = exampleConfigPkgs;
+        };
       };
     in {
       # Example images built from internal host configs for testing.
