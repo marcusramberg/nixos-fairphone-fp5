@@ -34,6 +34,7 @@ in {
   };
 
   imports = [
+    ../audio
     ./resize-rootfs.nix
   ];
 
