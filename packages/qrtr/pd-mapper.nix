@@ -10,7 +10,10 @@ stdenv.mkDerivation {
   # No versioned releases, so let's use the commit hash for now.
   version = "0a43c8be564feae0493b6e24b2e3e98459a4f9b6";
 
-  buildInputs = [qrtr xz];
+  buildInputs = [
+    qrtr
+    xz
+  ];
 
   src = fetchFromGitHub {
     owner = "linux-msm";
@@ -23,13 +26,13 @@ stdenv.mkDerivation {
     ./pd-mapper-firmware-path.diff
   ];
 
-  installFlags = ["prefix=$(out)"];
+  installFlags = [ "prefix=$(out)" ];
 
   meta = with lib; {
     description = "Qualcomm PD mapper";
     homepage = "https://github.com/linux-msm/pd-mapper";
     license = licenses.bsd3;
-    maintainers = [];
+    maintainers = [ ];
     platforms = platforms.aarch64;
   };
 }

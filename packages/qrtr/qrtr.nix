@@ -19,15 +19,19 @@ stdenv.mkDerivation {
     hash = "sha256-iHjF/2SQsvB/qC/UykNITH/apcYSVD+n4xA0S/rIfnM=";
   };
 
-  nativeBuildInputs = [meson ninja pkg-config];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
 
-  buildInputs = [systemd];
+  buildInputs = [ systemd ];
 
   meta = with lib; {
     description = "Qualcomm IPC Router userspace tools and library";
     homepage = "https://github.com/linux-msm/qrtr";
     license = licenses.bsd3;
-    maintainers = [];
+    maintainers = [ ];
     platforms = platforms.linux;
   };
 }

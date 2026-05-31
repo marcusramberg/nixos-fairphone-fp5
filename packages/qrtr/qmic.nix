@@ -15,13 +15,13 @@ stdenv.mkDerivation {
     hash = "sha256-0/mIg98pN66ZaVsQ6KmZINuNfiKvdEHMsqDx0iciF8w=";
   };
 
-  installFlags = ["prefix=$(out)"];
+  installFlags = [ "prefix=$(out)" ];
 
   meta = with lib; {
     description = "QMI IDL compiler";
     homepage = "https://github.com/linux-msm/qmic";
     license = licenses.bsd3;
-    maintainers = [];
+    maintainers = [ ];
     platforms = platforms.linux;
   };
 }

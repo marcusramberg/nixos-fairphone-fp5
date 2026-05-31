@@ -7,7 +7,10 @@
   networking.hostName = "fairphone";
 
   # Enable experimental Nix features (flakes).
-  nix.settings.experimental-features = ["nix-command" "flakes"];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 
   # Create admin user with default password for testing.
   users = {
@@ -19,7 +22,7 @@
       # Users should change this with `passwd` after first login.
       initialPassword = "admin";
       # Add to wheel group for sudo access.
-      extraGroups = ["wheel"];
+      extraGroups = [ "wheel" ];
     };
   };
 

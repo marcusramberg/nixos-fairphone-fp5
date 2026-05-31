@@ -4,7 +4,8 @@
 # so let's downgrade for now to ensure compatibility.
 #
 # Note: This is kind of cursed, but ¯\_( ͡° ͜ʖ ͡°)_/¯
-final: prev: let
+final: prev:
+let
   # Pinned Nixpkgs tarball with GNOME 48 packages.
   nixpkgs-gnome-48 = builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60.tar.gz";
@@ -16,7 +17,8 @@ final: prev: let
     inherit (final) system;
     config = final.config;
   };
-in {
+in
+{
   adwaita-icon-theme = pkgs-gnome-48.adwaita-icon-theme;
   calls = pkgs-gnome-48.calls;
   dconf = pkgs-gnome-48.dconf;

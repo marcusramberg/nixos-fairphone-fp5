@@ -1,13 +1,14 @@
-{pkgs, ...}: {
+{ pkgs, ... }:
+{
   # Automatically resize the root filesystem to fill the entire partition on first boot.
   # This is necessary because the flashed ext4 image is sized to fit only the initial
   # rootfs contents (~9-10 GB), while the userdata partition is much larger (214 GB on
   # Fairphone 5). This service expands the filesystem to utilize the full partition.
   systemd.services.resize-rootfs = {
     description = "Resize root filesystem to fill partition";
-    wantedBy = ["local-fs.target"];
-    after = ["local-fs.target"];
-    before = ["systemd-user-sessions.service"];
+    wantedBy = [ "local-fs.target" ];
+    after = [ "local-fs.target" ];
+    before = [ "systemd-user-sessions.service" ];
 
     # This is a oneshot service that should only run once.
     serviceConfig = {
@@ -16,7 +17,11 @@
     };
 
     # Ensure we have the required tools available.
-    path = with pkgs; [e2fsprogs gawk util-linux];
+    path = with pkgs; [
+      e2fsprogs
+      gawk
+      util-linux
+    ];
 
     script = ''
       # Marker file to track if we've already resized.

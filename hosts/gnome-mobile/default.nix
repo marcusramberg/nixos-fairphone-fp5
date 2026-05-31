@@ -1,4 +1,5 @@
-{pkgs, ...}: {
+{ pkgs, ... }:
+{
   # Import hardware-specific configuration for Fairphone 5 and GNOME Mobile.
   imports = [
     ../../modules/bootmac
@@ -13,7 +14,10 @@
   nixos-fairphone-fp5.modem.enable = true;
 
   # Enable experimental Nix features (flakes).
-  nix.settings.experimental-features = ["nix-command" "flakes"];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 
   # Disable documentation (hides desktop icon).
   documentation.nixos.enable = false;
@@ -40,9 +44,9 @@
   services.flatpak.enable = true;
   systemd.services.flatpak-remote-add-flathub = {
     description = "Add Flathub repository for Flatpak";
-    wantedBy = ["multi-user.target"];
-    after = ["network-online.target"];
-    wants = ["network-online.target"];
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
 
     serviceConfig = {
       Type = "oneshot";

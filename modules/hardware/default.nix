@@ -3,9 +3,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.nixos-fairphone-fp5.hardware;
-in {
+in
+{
   options.nixos-fairphone-fp5.hardware = {
     serial = {
       enable = lib.mkOption {
@@ -138,45 +140,43 @@ in {
         fi
       '';
 
-      kernelParams =
-        lib.mkAfter
-        (
-          [
-            "loglevel=4"
-          ]
-          ++ lib.optionals cfg.serial.enable [
-            # Systemd console output configuration. This makes systemd output boot messages to
-            # the console so we can see stage-2 boot.
-            "systemd.log_target=console"
+      kernelParams = lib.mkAfter (
+        [
+          "loglevel=4"
+        ]
+        ++ lib.optionals cfg.serial.enable [
+          # Systemd console output configuration. This makes systemd output boot messages to
+          # the console so we can see stage-2 boot.
+          "systemd.log_target=console"
 
-            # Console outputs; Order matters for BOTH kernel and initramfs!
-            # - Kernel: LAST console becomes `/dev/console`.
-            # - Initramfs: FIRST `console=` param sets the `$console` variable.
-            #
-            # Add USB serial console (ttyGS0) if enabled. List it before ttyMSM0 so init script
-            # outputs to USB serial that we can monitor.
-            "console=ttyGS0,115200"
-          ]
-          ++ [
-            # Hardware UART serial console.
-            # See: https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/testing/device-fairphone-fp5/deviceinfo.
-            "console=ttyMSM0,115200"
+          # Console outputs; Order matters for BOTH kernel and initramfs!
+          # - Kernel: LAST console becomes `/dev/console`.
+          # - Initramfs: FIRST `console=` param sets the `$console` variable.
+          #
+          # Add USB serial console (ttyGS0) if enabled. List it before ttyMSM0 so init script
+          # outputs to USB serial that we can monitor.
+          "console=ttyGS0,115200"
+        ]
+        ++ [
+          # Hardware UART serial console.
+          # See: https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/testing/device-fairphone-fp5/deviceinfo.
+          "console=ttyMSM0,115200"
 
-            # Framebuffer console; makes boot messages visible on the phone's screen.
-            # This is listed last so it becomes the primary console (`/dev/console`).
-            # The DRM driver provides fbdev emulation (CONFIG_DRM_FBDEV_EMULATION=y in kernel),
-            # which creates the framebuffer device that `tty1` outputs to.
-            "console=tty1"
-          ]
-          # Add verbose logging options if enabled.
-          ++ lib.optionals cfg.serial.verbose [
-            # Force ALL kernel log messages to console, including userspace writes to `/dev/kmsg`.
-            # Without this, initramfs messages written to `/dev/kmsg` don't appear on serial console.
-            "ignore_loglevel"
-            # Enable debug-level systemd logging.
-            "systemd.log_level=debug"
-          ]
-        );
+          # Framebuffer console; makes boot messages visible on the phone's screen.
+          # This is listed last so it becomes the primary console (`/dev/console`).
+          # The DRM driver provides fbdev emulation (CONFIG_DRM_FBDEV_EMULATION=y in kernel),
+          # which creates the framebuffer device that `tty1` outputs to.
+          "console=tty1"
+        ]
+        # Add verbose logging options if enabled.
+        ++ lib.optionals cfg.serial.verbose [
+          # Force ALL kernel log messages to console, including userspace writes to `/dev/kmsg`.
+          # Without this, initramfs messages written to `/dev/kmsg` don't appear on serial console.
+          "ignore_loglevel"
+          # Enable debug-level systemd logging.
+          "systemd.log_level=debug"
+        ]
+      );
     };
 
     # Root filesystem configuration.
@@ -193,7 +193,7 @@ in {
     # `ttyGS0` is the USB serial (only enabled if serial.enable is true).
     systemd.services."serial-getty@ttyGS0" = lib.mkIf cfg.serial.enable {
       enable = true;
-      wantedBy = ["multi-user.target"];
+      wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Restart = "always";
       };
@@ -202,7 +202,7 @@ in {
     # `ttyMSM0` is the hardware UART serial (always enabled for framebuffer console).
     systemd.services."serial-getty@ttyMSM0" = {
       enable = true;
-      wantedBy = ["multi-user.target"];
+      wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Restart = "always";
       };

@@ -3,9 +3,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.nixos-fairphone-fp5.gnome-mobile;
-in {
+in
+{
   options.nixos-fairphone-fp5.gnome-mobile = {
     defaultWallpaper = {
       enable = lib.mkOption {
@@ -30,7 +32,10 @@ in {
     };
 
     colorScheme = lib.mkOption {
-      type = lib.types.enum ["default" "prefer-dark"];
+      type = lib.types.enum [
+        "default"
+        "prefer-dark"
+      ];
       default = "default";
       description = ''
         Default color scheme for GNOME (light or dark mode).
@@ -40,40 +45,41 @@ in {
     };
   };
 
-  config = let
-    # Wallpaper configuration package.
-    nixos-fairphone-wallpaper-info = pkgs.writeTextFile {
-      name = "nixos-fairphone-wallpaper-info";
-      text = ''
-        <?xml version="1.0"?>
-        <!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
-        <wallpapers>
-          <wallpaper deleted="false">
-            <name>NixOS Fairphone</name>
-            <filename>${cfg.defaultWallpaper.path}</filename>
-            <filename-dark>${cfg.defaultWallpaper.path}</filename-dark>
-            <options>zoom</options>
-            <shade_type>solid</shade_type>
-            <pcolor>#000000</pcolor>
-            <scolor>#000000</scolor>
-          </wallpaper>
-        </wallpapers>
-      '';
-      destination = "/share/gnome-background-properties/nixos-fairphone-wallpaper.xml";
-    };
-  in {
-    # Install wallpaper metadata if wallpaper is enabled.
-    environment.systemPackages = lib.optionals cfg.defaultWallpaper.enable [
-      nixos-fairphone-wallpaper-info
-    ];
+  config =
+    let
+      # Wallpaper configuration package.
+      nixos-fairphone-wallpaper-info = pkgs.writeTextFile {
+        name = "nixos-fairphone-wallpaper-info";
+        text = ''
+          <?xml version="1.0"?>
+          <!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+          <wallpapers>
+            <wallpaper deleted="false">
+              <name>NixOS Fairphone</name>
+              <filename>${cfg.defaultWallpaper.path}</filename>
+              <filename-dark>${cfg.defaultWallpaper.path}</filename-dark>
+              <options>zoom</options>
+              <shade_type>solid</shade_type>
+              <pcolor>#000000</pcolor>
+              <scolor>#000000</scolor>
+            </wallpaper>
+          </wallpapers>
+        '';
+        destination = "/share/gnome-background-properties/nixos-fairphone-wallpaper.xml";
+      };
+    in
+    {
+      # Install wallpaper metadata if wallpaper is enabled.
+      environment.systemPackages = lib.optionals cfg.defaultWallpaper.enable [
+        nixos-fairphone-wallpaper-info
+      ];
 
-    programs.dconf = {
-      enable = true;
+      programs.dconf = {
+        enable = true;
 
-      profiles.user.databases = [
-        {
-          settings =
-            {
+        profiles.user.databases = [
+          {
+            settings = {
               "org/gnome/desktop/interface" = {
                 color-scheme = cfg.colorScheme;
               };
@@ -88,8 +94,8 @@ in {
                 secondary-color = "#000000";
               };
             };
-        }
-      ];
+          }
+        ];
+      };
     };
-  };
 }

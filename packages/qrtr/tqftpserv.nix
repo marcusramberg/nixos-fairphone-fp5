@@ -13,9 +13,16 @@ stdenv.mkDerivation {
   # No versioned releases, so let's use the commit hash for now.
   version = "408ca1ed5e4e0a9ac3650b13d3f3c60079b3e2a3";
 
-  nativeBuildInputs = [meson ninja pkg-config];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
 
-  buildInputs = [qrtr zstd];
+  buildInputs = [
+    qrtr
+    zstd
+  ];
 
   src = fetchFromGitHub {
     owner = "linux-msm";
@@ -32,7 +39,7 @@ stdenv.mkDerivation {
     description = "Trivial File Transfer Protocol server over AF_QIPCRTR";
     homepage = "https://github.com/linux-msm/tqftpserv";
     license = licenses.bsd3;
-    maintainers = [];
+    maintainers = [ ];
     platforms = platforms.aarch64;
   };
 }

@@ -23,9 +23,9 @@ stdenv.mkDerivation {
     '';
     homepage = "https://github.com/linux-msm/pil-squasher";
     license = lib.licenses.bsd3;
-    maintainers = [];
+    maintainers = [ ];
     platforms = lib.platforms.linux;
   };
 
-  makeFlags = ["prefix=$(out)"];
+  makeFlags = [ "prefix=$(out)" ];
 }

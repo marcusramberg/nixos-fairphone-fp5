@@ -13,9 +13,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.nixos-fairphone-fp5.modem;
-in {
+in
+{
   options.nixos-fairphone-fp5.modem = {
     enable = lib.mkOption {
       type = lib.types.bool;
@@ -79,7 +81,7 @@ in {
       # TFTP server over QRTR. Provides firmware files to the modem at runtime via the QRTR protocol.
       tqftpserv = {
         description = "TFTP server over QRTR";
-        wantedBy = ["multi-user.target"];
+        wantedBy = [ "multi-user.target" ];
 
         serviceConfig = {
           ExecStart = "${pkgs.tqftpserv}/bin/tqftpserv${lib.optionalString cfg.verbose " -v"}";
@@ -91,7 +93,7 @@ in {
       # Protection Domain Mapper. Routes messages between modem and DSP subsystems.
       pd-mapper = {
         description = "Qualcomm Protection Domain Mapper";
-        wantedBy = ["multi-user.target"];
+        wantedBy = [ "multi-user.target" ];
 
         serviceConfig = {
           ExecStart = "${pkgs.pd-mapper}/bin/pd-mapper${lib.optionalString cfg.verbose " -v"}";
@@ -105,7 +107,7 @@ in {
       # /dev/disk/by-partlabel/ instead of files.
       rmtfs = {
         description = "Qualcomm Remote Filesystem Service";
-        wantedBy = ["multi-user.target"];
+        wantedBy = [ "multi-user.target" ];
 
         serviceConfig = {
           ExecStart = "${pkgs.rmtfs}/bin/rmtfs -r -P -s${lib.optionalString cfg.verbose " -v"}";
@@ -119,11 +121,24 @@ in {
       # Waits for modem services to be ready before running.
       msm-modem-uim-selection = {
         description = "Qualcomm modem SIM card slot selection";
-        before = ["ModemManager.service"];
-        after = ["rmtfs.service" "pd-mapper.service" "tqftpserv.service"];
-        requires = ["rmtfs.service" "pd-mapper.service" "tqftpserv.service"];
-        wantedBy = ["ModemManager.service"];
-        path = with pkgs; [libqmi gawk gnugrep coreutils];
+        before = [ "ModemManager.service" ];
+        after = [
+          "rmtfs.service"
+          "pd-mapper.service"
+          "tqftpserv.service"
+        ];
+        requires = [
+          "rmtfs.service"
+          "pd-mapper.service"
+          "tqftpserv.service"
+        ];
+        wantedBy = [ "ModemManager.service" ];
+        path = with pkgs; [
+          libqmi
+          gawk
+          gnugrep
+          coreutils
+        ];
 
         script = ''
           # Wait for modem to be ready by checking QRTR node availability.

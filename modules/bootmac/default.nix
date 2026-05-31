@@ -12,9 +12,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.nixos-fairphone-fp5.bootmac;
-in {
+in
+{
   options.nixos-fairphone-fp5.bootmac = {
     enable = lib.mkOption {
       type = lib.types.bool;
@@ -90,12 +92,12 @@ in {
       description = "Set Bluetooth MAC address";
 
       # Wait for the Bluetooth device to be available.
-      after = ["sys-subsystem-bluetooth-devices-${cfg.bluetooth.interface}.device"];
-      requires = ["sys-subsystem-bluetooth-devices-${cfg.bluetooth.interface}.device"];
+      after = [ "sys-subsystem-bluetooth-devices-${cfg.bluetooth.interface}.device" ];
+      requires = [ "sys-subsystem-bluetooth-devices-${cfg.bluetooth.interface}.device" ];
 
       # Run before bluetooth.service starts.
-      before = ["bluetooth.service"];
-      wantedBy = ["bluetooth.service"];
+      before = [ "bluetooth.service" ];
+      wantedBy = [ "bluetooth.service" ];
 
       serviceConfig = {
         Type = "oneshot";
@@ -110,12 +112,12 @@ in {
       description = "Set WiFi MAC address";
 
       # Wait for the WiFi network device to be available.
-      after = ["sys-subsystem-net-devices-${cfg.wifi.interface}.device"];
-      requires = ["sys-subsystem-net-devices-${cfg.wifi.interface}.device"];
+      after = [ "sys-subsystem-net-devices-${cfg.wifi.interface}.device" ];
+      requires = [ "sys-subsystem-net-devices-${cfg.wifi.interface}.device" ];
 
       # Run before network starts.
-      before = ["network-pre.target"];
-      wantedBy = ["network-pre.target"];
+      before = [ "network-pre.target" ];
+      wantedBy = [ "network-pre.target" ];
 
       serviceConfig = {
         Type = "oneshot";

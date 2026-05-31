@@ -3,9 +3,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.nixos-fairphone-fp5.gnome-mobile;
-in {
+in
+{
   options.nixos-fairphone-fp5.gnome-mobile = {
     installDefaultApps = lib.mkOption {
       type = lib.types.bool;
@@ -48,7 +50,11 @@ in {
 
     powerButton = {
       shortPress = lib.mkOption {
-        type = lib.types.enum ["ignore" "suspend" "poweroff"];
+        type = lib.types.enum [
+          "ignore"
+          "suspend"
+          "poweroff"
+        ];
         default = "ignore";
         description = ''
           Action to perform on short power button press.
@@ -63,7 +69,11 @@ in {
       };
 
       longPress = lib.mkOption {
-        type = lib.types.enum ["ignore" "suspend" "poweroff"];
+        type = lib.types.enum [
+          "ignore"
+          "suspend"
+          "poweroff"
+        ];
         default = "poweroff";
         description = ''
           Action to perform on long power button press.
@@ -148,7 +158,7 @@ in {
       enable = false;
 
       # Use modesetting driver for mobile GPU (same option for X11 and Wayland).
-      videoDrivers = ["modesetting"];
+      videoDrivers = [ "modesetting" ];
     };
 
     # Enable GNOME Desktop Manager.
@@ -164,7 +174,7 @@ in {
         experimental-features=['scale-monitor-framebuffer']
       '';
 
-      extraGSettingsOverridePackages = [pkgs.mutter];
+      extraGSettingsOverridePackages = [ pkgs.mutter ];
     };
 
     # Enable GDM (GNOME Display Manager) with Wayland.
@@ -212,7 +222,8 @@ in {
     '';
 
     # Install essential mobile packages.
-    environment.systemPackages = with pkgs;
+    environment.systemPackages =
+      with pkgs;
       [
         # NetworkManager for connection management.
         networkmanager
@@ -229,10 +240,10 @@ in {
 
     # Ensure ModemManager is started before NetworkManager.
     systemd.services.ModemManager = lib.mkIf config.nixos-fairphone-fp5.modem.enable {
-      aliases = ["dbus-org.freedesktop.ModemManager1.service"];
-      wantedBy = ["NetworkManager.service"];
-      partOf = ["NetworkManager.service"];
-      after = ["NetworkManager.service"];
+      aliases = [ "dbus-org.freedesktop.ModemManager1.service" ];
+      wantedBy = [ "NetworkManager.service" ];
+      partOf = [ "NetworkManager.service" ];
+      after = [ "NetworkManager.service" ];
     };
 
     # FIXME: Audio hardware is not yet detected on the Fairphone, which is not
