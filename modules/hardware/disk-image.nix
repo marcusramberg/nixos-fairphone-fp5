@@ -56,7 +56,7 @@ in
   # initrd, so losetup must be pulled in explicitly.
   boot.initrd.systemd.initrdBin = [ pkgs.util-linux ];
   boot.initrd.services.udev.rules = ''
-    SUBSYSTEM=="block", ACTION!="remove", ENV{ID_PART_ENTRY_NAME}=="userdata", RUN+="${pkgs.util-linux}/bin/losetup --partscan --find --sector-size 4096 --loop-ref userdata /dev/%k"
+    SUBSYSTEM=="block", ACTION=="add", ENV{ID_PART_ENTRY_NAME}=="userdata", RUN+="${pkgs.util-linux}/bin/losetup --partscan --find --nooverlap --sector-size 4096 --loop-ref userdata /dev/%k"
   '';
 
   image.repart = {
