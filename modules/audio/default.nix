@@ -80,5 +80,6 @@ in
     systemd.user.services.wireplumber.environment = {
       "ALSA_CONFIG_UCM2" = "${pkgs.alsa-ucm-conf-fairphone-fp5}/share/alsa/ucm2";
     };
+
   };
 }
