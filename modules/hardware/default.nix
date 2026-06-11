@@ -37,6 +37,7 @@ in
 
   imports = [
     ../audio
+    ../sensors
     ./disk-image.nix
   ];
 

@@ -23,6 +23,15 @@ final: prev: {
   # in an Android boot image, provides a UEFI environment for systemd-boot.
   uboot-fairphone-fp5 = final.callPackage ../../packages/uboot { };
 
+  # iio-sensor-proxy with the Qualcomm SSC backend enabled. The Fairphone 5's
+  # sensors (accelerometer etc.) hang off the ADSP sensors PD and are reached
+  # via libssc over FastRPC, not via kernel IIO drivers. nixpkgs builds
+  # iio-sensor-proxy without libssc, so the SSC backend is compiled out.
+  iio-sensor-proxy = prev.iio-sensor-proxy.overrideAttrs (old: {
+    buildInputs = (old.buildInputs or [ ]) ++ [ final.libssc ];
+    mesonFlags = (old.mesonFlags or [ ]) ++ [ "-Dssc-support=enabled" ];
+  });
+
   # Protection domain mapper for Qualcomm modems.
   pd-mapper = final.callPackage ../../packages/qrtr/pd-mapper.nix { };
 
