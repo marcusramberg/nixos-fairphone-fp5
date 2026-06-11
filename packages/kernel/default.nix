@@ -100,6 +100,15 @@ in
       name = "hci-qca-drop-unused-event";
       patch = ./patches/hci-qca-drop-unused-event.patch;
     }
+    {
+      # The LPASS LPI pinctrl's clocks are provided by the ADSP (q6prm over
+      # GLINK). If the pinctrl probes before the ADSP remoteproc has booted,
+      # the clock enable times out and the probe fails permanently, leaving
+      # the sound card stuck in deferred probe. Return -EPROBE_DEFER instead
+      # so the probe is retried once the ADSP is up.
+      name = "pinctrl-lpass-lpi-defer-on-clk-timeout";
+      patch = ./patches/pinctrl-lpass-lpi-defer-on-clk-timeout.patch;
+    }
   ];
   src = kernelSrc;
   stdenv =
