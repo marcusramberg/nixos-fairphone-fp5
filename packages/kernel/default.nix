@@ -1,7 +1,6 @@
 {
   fetchFromGitHub,
   fetchFromGitLab,
-  gzip,
   lib,
   linuxKernel,
   stdenv,
@@ -64,9 +63,16 @@ let
         -e 's/# CONFIG_NETFILTER_XT_TARGET_CONNMARK is not set/CONFIG_NETFILTER_XT_TARGET_CONNMARK=m/' \
         -e 's/# CONFIG_NETFILTER_XT_MATCH_CONNMARK is not set/CONFIG_NETFILTER_XT_MATCH_CONNMARK=m/' \
         -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
-        -e 's/^CONFIG_EFI=y/# CONFIG_EFI is not set/' \
-        -e 's/^CONFIG_EFI_STUB=y/# CONFIG_EFI_STUB is not set/' \
         $src > config
+
+      # EFI boot via U-Boot's UEFI environment: keep CONFIG_EFI/CONFIG_EFI_STUB
+      # from the pmOS config and additionally build the EFI zboot image
+      # (vmlinuz.efi) that systemd-boot loads from the ESP.
+      if grep -q '^# CONFIG_EFI_ZBOOT is not set' config; then
+        sed -i 's/^# CONFIG_EFI_ZBOOT is not set/CONFIG_EFI_ZBOOT=y/' config
+      elif ! grep -q '^CONFIG_EFI_ZBOOT=' config; then
+        echo 'CONFIG_EFI_ZBOOT=y' >> config
+      fi
     '';
 
     installPhase = ''
@@ -97,25 +103,16 @@ in
   ];
   src = kernelSrc;
   stdenv =
-    # Override `stdenv` to produce compressed kernel image target.
+    # Override `stdenv` to produce the EFI zboot image (`vmlinuz.efi`) that
+    # systemd-boot loads from the ESP. Must match `linux-kernel.target` in
+    # `nixpkgs.hostPlatform` set by `modules/hardware/default.nix`.
     stdenv.override {
       hostPlatform = stdenv.hostPlatform // {
         linux-kernel = stdenv.hostPlatform.linux-kernel // {
-          target = "Image.gz";
+          target = "vmlinuz.efi";
           installTarget = "zinstall";
         };
       };
     };
   version = kernelVersion.string;
-}).overrideAttrs
-  (oldAttrs: {
-    # Also install the uncompressed `Image` for NixOS compatibility. NixOS expects `Image` to exist,
-    # even though we'll use `Image.gz` for boot.
-    postInstall = (oldAttrs.postInstall or "") + ''
-      # Decompress Image.gz to Image for NixOS compatibility.
-      if [ -f "$out/Image.gz" ] && [ ! -f "$out/Image" ]; then
-        echo "Decompressing Image.gz to Image for NixOS compatibility..."
-        ${lib.getExe' gzip "gunzip"} -c "$out/Image.gz" > "$out/Image"
-      fi
-    '';
-  })
+})

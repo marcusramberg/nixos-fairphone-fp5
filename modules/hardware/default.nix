@@ -37,7 +37,7 @@ in
 
   imports = [
     ../audio
-    ./resize-rootfs.nix
+    ./disk-image.nix
   ];
 
   config = {
@@ -49,9 +49,16 @@ in
     # Target architecture for Fairphone 5.
     nixpkgs.hostPlatform = "aarch64-linux";
 
+    # Our kernel package builds an EFI zboot image (`vmlinuz.efi`, see
+    # `packages/kernel`), which systemd-boot loads from the ESP under U-Boot's
+    # UEFI environment. Tell the bootloader machinery the kernel file name,
+    # since the default is derived from the platform's standard `Image` target.
+    system.boot.loader.kernelFile = "vmlinuz.efi";
+
     hardware = {
-      # Device tree configuration. Note: The DTB will be appended to the kernel `Image.gz`
-      # during boot image creation.
+      # Device tree configuration. U-Boot carries its own FP5 DTB and hands it
+      # to the kernel via the EFI configuration table; this keeps the kernel's
+      # DTB available for tooling and as a fallback.
       deviceTree = {
         enable = true;
 
@@ -96,11 +103,15 @@ in
         # Disable default modules (like `ahci`) that don't exist in our custom kernel.
         includeDefaultModules = false;
 
-        # Use traditional stage-1 init.
-        systemd.enable = false;
+        # systemd stage-1; required for systemd-repart growth and UKI boot flow.
+        systemd.enable = true;
+
+        # systemd stage-1 pulls in TPM kernel modules by default, but the
+        # Fairphone 5 has no TPM and the kernel doesn't build the drivers.
+        systemd.tpm2.enable = false;
       };
 
-      # Disable GRUB bootloader, as we use Android boot image format.
+      # GRUB is not used; systemd-boot is enabled in `disk-image.nix`.
       loader.grub.enable = false;
 
       # On first boot, perform one-time initialization tasks. This is similar to how
@@ -113,10 +124,11 @@ in
           set -x
 
           # Register the contents of the initial Nix store.
-          # The /nix-path-registration file is created by make-ext4-fs.nix and contains
-          # the database entries for all store paths included in the rootfs image.
-          # Without this step, Nix doesn't know about pre-installed paths and tries to
-          # build them, which fails on the device.
+          # The /nix-path-registration file is baked into the root partition by
+          # disk-image.nix (from closureInfo) and contains the database entries
+          # for all store paths included in the image. Without this step, Nix
+          # doesn't know about pre-installed paths and tries to build them,
+          # which fails on the device.
           ${config.nix.package.out}/bin/nix-store --load-db < /nix-path-registration
 
           # nixos-rebuild also requires a "system" profile and an /etc/NIXOS tag.
