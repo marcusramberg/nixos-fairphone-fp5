@@ -28,10 +28,6 @@ in
 {
   imports = [ "${modulesPath}/image/repart.nix" ];
 
-  # systemd-boot on the ESP, chain-loaded from U-Boot's UEFI environment.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = false;
-
   fileSystems."/boot" = {
     device = "/dev/disk/by-label/ESP";
     fsType = "vfat";
@@ -41,23 +37,32 @@ in
   # first boot (the image is built minimized).
   systemd.repart.enable = true;
   systemd.repart.partitions."03-root".Type = "root";
-  boot.initrd.supportedFilesystems.ext4 = true;
+  boot = {
+    # systemd-boot on the ESP, chain-loaded from U-Boot's UEFI environment.
+    loader = {
+      systemd-boot.enable = true;
+      efi.canTouchEfiVariables = false;
+    };
+    initrd.supportedFilesystems.ext4 = true;
 
-  # The GPT disk image lives *inside* the `userdata` partition of the phone's
-  # UFS GPT. Linux does not scan partition tables nested inside partitions, so
-  # the inner ESP/root partitions would never appear. Expose them by attaching
-  # the userdata partition to a loop device with partition scanning, mirroring
-  # what U-Boot's blkmap preboot does for the bootloader side.
-  # The loop device must use 4096-byte sectors to match the image's GPT
-  # (and UFS logical block size); the 512-byte default would make the nested
-  # partition table unparseable.
-  boot.initrd.availableKernelModules = [ "loop" ];
-  # The udev rules text is not scanned for store references when building the
-  # initrd, so losetup must be pulled in explicitly.
-  boot.initrd.systemd.initrdBin = [ pkgs.util-linux ];
-  boot.initrd.services.udev.rules = ''
-    SUBSYSTEM=="block", ACTION=="add", ENV{ID_PART_ENTRY_NAME}=="userdata", RUN+="${pkgs.util-linux}/bin/losetup --partscan --find --nooverlap --sector-size 4096 --loop-ref userdata /dev/%k"
-  '';
+    # The GPT disk image lives *inside* the `userdata` partition of the phone's
+    # UFS GPT. Linux does not scan partition tables nested inside partitions, so
+    # the inner ESP/root partitions would never appear. Expose them by attaching
+    # the userdata partition to a loop device with partition scanning, mirroring
+    # what U-Boot's blkmap preboot does for the bootloader side.
+    # The loop device must use 4096-byte sectors to match the image's GPT
+    # (and UFS logical block size); the 512-byte default would make the nested
+    # partition table unparseable.
+    initrd = {
+      availableKernelModules = [ "loop" ];
+      # The udev rules text is not scanned for store references when building the
+      # initrd, so losetup must be pulled in explicitly.
+      systemd.initrdBin = [ pkgs.util-linux ];
+      services.udev.rules = ''
+        SUBSYSTEM=="block", ACTION=="add", ENV{ID_PART_ENTRY_NAME}=="userdata", RUN+="${pkgs.util-linux}/bin/losetup --partscan --find --nooverlap --sector-size 4096 --loop-ref userdata /dev/%k"
+      '';
+    };
+  };
 
   image.repart = {
     name = "image";
