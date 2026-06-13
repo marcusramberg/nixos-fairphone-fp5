@@ -199,6 +199,33 @@ in
       fsType = "ext4";
     };
 
+    # Compressed RAM swap. The FP5 has no swap partition, so under memory
+    # pressure the kernel had nothing to reclaim and the OOM killer (or a hard
+    # hang) kicked in. zram provides a compressed block device in RAM used as
+    # swap: cold/inactive pages get compressed (typically 2-3x with zstd)
+    # instead of evicted, which is far cheaper than disk swap on flash storage.
+    zramSwap = {
+      enable = true;
+      algorithm = "zstd";
+      # Size of the uncompressed zram device as a percentage of physical RAM.
+      # 100% is the common phone default: with ~2-3x compression this yields an
+      # effective swap roughly the size of RAM again without risking that the
+      # incompressible-worst-case backing allocation exhausts memory itself.
+      memoryPercent = 100;
+    };
+
+    # Bias the kernel toward using zram. Because compressed-RAM swap is orders
+    # of magnitude faster than disk swap, a high swappiness keeps more RAM free
+    # for the active working set instead of leaving it pinned by idle pages.
+    boot.kernel.sysctl = {
+      "vm.swappiness" = 150;
+      # Reclaim cache pages aggressively before swapping anonymous pages.
+      "vm.vfs_cache_pressure" = 200;
+      # Keep dirty page writeback small so reclaim stays responsive under load.
+      "vm.dirty_background_ratio" = 5;
+      "vm.dirty_ratio" = 10;
+    };
+
     # Console configuration for serial output.
     console.earlySetup = true;
 
