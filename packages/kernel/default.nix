@@ -11,8 +11,8 @@ let
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
-    rev = "v7.0.8-sc7280";
-    hash = "sha256-dU+UeCr8aVIg226ZnqryPlLuOPsKkKgR/KN/LkvHDGo=";
+    rev = "778077c934d08715ee5ac86084818d76545df9cd";
+    hash = "sha256-ozqUz73oRLMqL5c9+DLewF9OXRLUPRc8xCplBp6DKlU=";
   };
 
   # Source of postmarketOS `pmaports` repository.
