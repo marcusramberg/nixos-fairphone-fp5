@@ -22,7 +22,7 @@ stdenv.mkDerivation {
     longDescription = ''
       WirePlumber configuration files for Qualcomm audio platforms.
       51-qcom.conf sets audio format, rate, and period parameters for all QCOM ALSA nodes.
-      52-fairphone-fp5.conf overrides audio format to S24_32LE for Fairphone 5 sinks.
+      52-fairphone-fp5.conf overrides audio format to S32LE for Fairphone 5 sinks.
     '';
     license = lib.licenses.mit;
     maintainers = [];
