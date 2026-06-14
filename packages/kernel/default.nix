@@ -63,6 +63,7 @@ let
         -e 's/# CONFIG_NETFILTER_XT_TARGET_CONNMARK is not set/CONFIG_NETFILTER_XT_TARGET_CONNMARK=m/' \
         -e 's/# CONFIG_NETFILTER_XT_MATCH_CONNMARK is not set/CONFIG_NETFILTER_XT_MATCH_CONNMARK=m/' \
         -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
+        -e 's/# CONFIG_WIREGUARD is not set/CONFIG_WIREGUARD=m/' \
         $src > config
 
       # EFI boot via U-Boot's UEFI environment: keep CONFIG_EFI/CONFIG_EFI_STUB
