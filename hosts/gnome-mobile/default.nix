@@ -6,6 +6,7 @@
     ../../modules/hardware
     ../../modules/modem
     ../../modules/gnome-mobile
+    ../../modules/qbootctl
   ];
 
   networking.hostName = "fairphone";

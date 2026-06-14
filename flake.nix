@@ -115,6 +115,7 @@
             ./modules/bootmac
             ./modules/hardware
             ./modules/modem
+            ./modules/qbootctl
           ];
         };
 
@@ -124,6 +125,7 @@
             ./modules/hardware
             ./modules/modem
             ./modules/gnome-mobile
+            ./modules/qbootctl
           ];
         };
 
@@ -134,6 +136,7 @@
             ./modules/hardware
             ./modules/modem
             ./modules/gnome-mobile
+            ./modules/qbootctl
           ];
         };
       };

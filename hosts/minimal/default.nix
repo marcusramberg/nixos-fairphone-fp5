@@ -2,6 +2,7 @@
   # Import hardware-specific configuration for Fairphone 5.
   imports = [
     ../../modules/hardware
+    ../../modules/qbootctl
   ];
 
   networking.hostName = "fairphone";
