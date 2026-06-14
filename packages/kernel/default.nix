@@ -80,17 +80,10 @@ let
     '';
   };
 
-  # Parse kernel version from Makefile.
-  kernelVersion = rec {
-    file = "${kernelSrc}/Makefile";
-    version = lib.head (builtins.match ".*VERSION = ([0-9]+).*" (builtins.readFile file));
-    patchlevel = lib.head (builtins.match ".*PATCHLEVEL = ([0-9]+).*" (builtins.readFile file));
-    sublevel = lib.head (builtins.match ".*SUBLEVEL = ([0-9]+).*" (builtins.readFile file));
-    string = "${version}.${patchlevel}.${sublevel}";
-  };
+  kernelVersion.string = "7.0.8";
   modDirVersion = kernelVersion.string;
 in
-(linuxKernel.manualConfig {
+linuxKernel.manualConfig {
   inherit lib;
 
   allowImportFromDerivation = true;
@@ -124,4 +117,4 @@ in
       };
     };
   version = kernelVersion.string;
-})
+}
