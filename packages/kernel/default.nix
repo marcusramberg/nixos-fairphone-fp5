@@ -64,7 +64,14 @@ let
         -e 's/# CONFIG_NETFILTER_XT_MATCH_CONNMARK is not set/CONFIG_NETFILTER_XT_MATCH_CONNMARK=m/' \
         -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
         -e 's/# CONFIG_WIREGUARD is not set/CONFIG_WIREGUARD=m/' \
+        -e 's/# CONFIG_NFC is not set/CONFIG_NFC=m/' \
         $src > config
+
+      # NFC sub-options are not present in pmOS config because CONFIG_NFC is
+      # disabled there. Append them explicitly.
+      echo 'CONFIG_NFC_NCI=m' >> config
+      echo 'CONFIG_NFC_ST_NCI=m' >> config
+      echo 'CONFIG_NFC_ST_NCI_I2C=m' >> config
 
       # EFI boot via U-Boot's UEFI environment: keep CONFIG_EFI/CONFIG_EFI_STUB
       # from the pmOS config and additionally build the EFI zboot image
@@ -102,6 +109,19 @@ linuxKernel.manualConfig {
       # so the probe is retried once the ADSP is up.
       name = "pinctrl-lpass-lpi-defer-on-clk-timeout";
       patch = ./patches/pinctrl-lpass-lpi-defer-on-clk-timeout.patch;
+    }
+    {
+      # Add ST21NFCD to the st-nci I2C driver device tree match table.
+      # The ST21NFCD is NCI 2.0 compliant and compatible with the existing
+      # st-nci driver protocol handling.
+      name = "nfc-st-nci-add-st21nfcd";
+      patch = ./patches/nfc-st-nci-add-st21nfcd.patch;
+    }
+    {
+      # Add the ST21NFCD NFC controller device tree node on I2C9.
+      # Hardware details from Fairphone 5 Android kernel source.
+      name = "dts-add-st21nfcd-nfc";
+      patch = ./patches/dts-add-st21nfcd-nfc.patch;
     }
   ];
   src = kernelSrc;

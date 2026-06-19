@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?NixOS-Fairphone-FP5?= <noreply@example.com>
+Date: Thu, 19 Jun 2026 00:00:00 +0000
+Subject: [PATCH] arm64: dts: qcom: qcm6490-fairphone-fp5: add ST21NFCD NFC
+ node
+
+Add the ST21NFCD NFC controller node on I2C9. Hardware details from
+Fairphone 5 Android kernel source (vendor/fp5/yupik-idp-pm7250b.dtsi
+and yupik-pinctrl.dtsi):
+
+  - I2C bus: qupv3_se9 (i2c9), address 0x28
+  - Reset GPIO: GPIO 38 (active low)
+  - IRQ GPIO: GPIO 41 (edge rising)
+  - Clock request GPIO: GPIO 39 (unused by mainline st-nci driver,
+    chip uses external 27.12 MHz crystal)
+
+Signed-off-by: NixOS-Fairphone-FP5 <noreply@example.com>
+---
+ arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts b/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
+index 1234567890..abcdef0123 100644
+--- a/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
++++ b/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
+@@ -1006,7 +1006,19 @@
+ &i2c9 {
+ 	status = "okay";
+ 
+-	/* ST21NFC NFC @ 28 */
++	st21nfcd: nfc@28 {
++		compatible = "st,st21nfcd-i2c";
++		reg = <0x28>;
++
++		interrupt-parent = <&tlmm>;
++		interrupts = <41 IRQ_TYPE_EDGE_RISING>;
++
++		reset-gpios = <&tlmm 38 GPIO_ACTIVE_LOW>;
++
++		ese-present;
++		uicc-present;
++		status = "okay";
++	};
+ 	/* VL53L3 ToF @ 29 */
+ };
+ 
+-- 
+2.49.0

@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?NixOS-Fairphone-FP5?= <noreply@example.com>
+Date: Thu, 19 Jun 2026 00:00:00 +0000
+Subject: [PATCH] NFC: st-nci: add support for ST21NFCD
+
+Add the ST21NFCD to the device tree match table. The ST21NFCD is NCI
+2.0 compliant and compatible with the existing st-nci driver protocol
+handling.
+
+Signed-off-by: NixOS-Fairphone-FP5 <noreply@example.com>
+---
+ drivers/nfc/st-nci/i2c.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/nfc/st-nci/i2c.c b/drivers/nfc/st-nci/i2c.c
+index 1234567890..abcdef0123 100644
+--- a/drivers/nfc/st-nci/i2c.c
++++ b/drivers/nfc/st-nci/i2c.c
+@@ -273,6 +273,7 @@ static const struct of_device_id of_st_nci_i2c_match[] __maybe_unused = {
+ 	{ .compatible = "st,st21nfcb-i2c", },
+ 	{ .compatible = "st,st21nfcb_i2c", },
+ 	{ .compatible = "st,st21nfcc-i2c", },
++	{ .compatible = "st,st21nfcd-i2c", },
+ 	{}
+ };
+ MODULE_DEVICE_TABLE(of, of_st_nci_i2c_match);
+-- 
+2.49.0

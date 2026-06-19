@@ -229,6 +229,9 @@ in
     # Console configuration for serial output.
     console.earlySetup = true;
 
+    # NFC userspace tools (libnfc includes nfc-scan, nfc-read, nfc-write, etc.).
+    environment.systemPackages = with pkgs; [ libnfc ];
+
     # Set getty on both serial consoles for login.
     #
     # `ttyGS0` is the USB serial (only enabled if serial.enable is true).
