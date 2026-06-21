@@ -64,7 +64,15 @@ let
         -e 's/# CONFIG_NETFILTER_XT_MATCH_CONNMARK is not set/CONFIG_NETFILTER_XT_MATCH_CONNMARK=m/' \
         -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
         -e 's/# CONFIG_WIREGUARD is not set/CONFIG_WIREGUARD=m/' \
+        -e 's/# CONFIG_NFC is not set/CONFIG_NFC=m/' \
         $src > config
+
+      # NFC sub-options are not present in pmOS config because CONFIG_NFC is
+      # disabled there. Append them explicitly. The FP5 CLF is a plain NCI
+      # controller over I2C (no NDLC), driven by our st21nfc-nci driver, so we
+      # enable the NCI core and that driver rather than st-nci.
+      echo 'CONFIG_NFC_NCI=m' >> config
+      echo 'CONFIG_NFC_ST21NFC_NCI=m' >> config
 
       # EFI boot via U-Boot's UEFI environment: keep CONFIG_EFI/CONFIG_EFI_STUB
       # from the pmOS config and additionally build the EFI zboot image
@@ -102,6 +110,20 @@ linuxKernel.manualConfig {
       # so the probe is retried once the ADSP is up.
       name = "pinctrl-lpass-lpi-defer-on-clk-timeout";
       patch = ./patches/pinctrl-lpass-lpi-defer-on-clk-timeout.patch;
+    }
+    {
+      # Raw-NCI/I2C driver for the FP5 ST21NFCD. The chip is a plain NCI
+      # controller (3-byte header, IRQ-driven, no NDLC link layer), so the
+      # mainline st-nci driver does not fit; this registers an nci_dev and
+      # lets the kernel NCI core drive it.
+      name = "nfc-st21nfc-nci-driver";
+      patch = ./patches/nfc-st21nfc-nci-driver.patch;
+    }
+    {
+      # Add the ST21NFCD NFC controller device tree node on I2C9.
+      # Hardware details from Fairphone 5 Android kernel source.
+      name = "dts-add-st21nfcd-nfc";
+      patch = ./patches/dts-add-st21nfcd-nfc.patch;
     }
   ];
   src = kernelSrc;
