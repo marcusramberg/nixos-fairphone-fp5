@@ -229,6 +229,10 @@ in
     # Console configuration for serial output.
     console.earlySetup = true;
 
+    # Enable neard for NFC support
+    services.neard.enable = true;
+    environment.systemPackages = with pkgs; [ neard ];
+
     # Set getty on both serial consoles for login.
     #
     # `ttyGS0` is the USB serial (only enabled if serial.enable is true).
