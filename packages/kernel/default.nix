@@ -127,17 +127,22 @@ linuxKernel.manualConfig {
     }
   ];
   src = kernelSrc;
-  stdenv =
-    # Override `stdenv` to produce the EFI zboot image (`vmlinuz.efi`) that
-    # systemd-boot loads from the ESP. Must match `linux-kernel.target` in
-    # `nixpkgs.hostPlatform` set by `modules/hardware/default.nix`.
-    stdenv.override {
-      hostPlatform = stdenv.hostPlatform // {
-        linux-kernel = stdenv.hostPlatform.linux-kernel // {
-          target = "vmlinuz.efi";
-          installTarget = "zinstall";
-        };
+
+  # Build the EFI zboot image (`vmlinuz.efi`) that systemd-boot loads
+  # from the ESP. For aarch64, build.nix defaults target to `Image`,
+  # so pass explicitly.
+  target = "vmlinuz.efi";
+
+  # Must match `linux-kernel.target` in `nixpkgs.hostPlatform` set by
+  # `modules/hardware/default.nix`.
+  stdenv = stdenv.override {
+    hostPlatform = stdenv.hostPlatform // {
+      linux-kernel = stdenv.hostPlatform.linux-kernel // {
+        target = "vmlinuz.efi";
+        installTarget = "zinstall";
       };
     };
+  };
+
   version = kernelVersion.string;
 }
