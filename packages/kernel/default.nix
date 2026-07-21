@@ -1,8 +1,8 @@
 {
   fetchFromGitHub,
-  fetchFromGitLab,
   lib,
   linuxKernel,
+  runCommand,
   stdenv,
   ...
 }:
@@ -15,83 +15,95 @@ let
     hash = "sha256-Fwk51Uj/2ag/J2iAhQzrIQ55FbMCKar+XPrd4xRlmv4=";
   };
 
-  # Source of postmarketOS `pmaports` repository.
-  pmaportsSrc = fetchFromGitLab {
-    domain = "gitlab.postmarketos.org";
-    owner = "postmarketOS";
-    repo = "pmaports";
-    rev = "6ff32835f458c490e008373eeaac3d2a5f82f311";
-    hash = "sha256-1vrNlbwFbaJmHTAmu/vW0tIcmRYHpRx/lWHvqvhY/sk=";
+  # Base kernel .config from postmarketOS for the `sc7280` chipset.
+  pmosConfigUrl = builtins.fetchurl {
+    url = "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/c9dbdc23ae775aa5cea8b857c123f1696c04528f/device/community/linux-postmarketos-qcom-sc7280/config-postmarketos-qcom-sc7280.aarch64";
+    sha256 = "1vjffmn4wx6b6yxp7cn80qpzm744n8h5wci5xwxrpf5f17rq9w87";
   };
 
-  # Use the kernel configuration from PostmarketOS for the `sc7280` chipset as the base.
+  # Parse a kernel .config into an attrset { CONFIG_FOO = "y"|"m"; } for set
+  # options, matching nixpkgs' own `readConfig` (full CONFIG_ keys, "is not
+  # set" lines dropped). Used only to build the passthru `config`.
+  parseConfig =
+    content:
+    let
+      parseLine =
+        line:
+        let
+          m = builtins.match "(CONFIG_[^=]+)=([ym])" line;
+        in
+        lib.optional (m != null) {
+          name = builtins.elemAt m 0;
+          value = builtins.elemAt m 1;
+        };
+    in
+    builtins.listToAttrs (lib.concatMap parseLine (lib.splitString "\n" content));
+
+  pmosConfig = parseConfig (builtins.readFile pmosConfigUrl);
+
+  # NixOS-compatible overrides on top of the pmOS base config.
   #
-  # However, we need to override some options that are disabled in PostmarketOS config to
-  # make it compatible with NixOS and enable some useful stuff:
-  # - CONFIG_DMIID: NixOS asserts that this is enabled for some reason...
-  # - CONFIG_U_SERIAL_CONSOLE: Enables USB serial gadget console output for debugging.
-  # - CONFIG_USB_G_SERIAL: Classic USB serial gadget driver.
-  # - CONFIG_ANDROID_BINDERFS: Required for Waydroid (Android container support).
+  # Use "y" (built-in), "m" (module), or "n" (disabled). Keys omit the
+  # CONFIG_ prefix. pmOS options are inherited; only deltas are listed.
   #
-  # Additional netfilter/iptables extensions required by NixOS firewall:
-  # - CONFIG_NETFILTER_XT_MATCH_PKTTYPE: Packet type matching.
-  # - CONFIG_NETFILTER_XT_MATCH_LIMIT: Rate limiting for firewall rules.
-  # - CONFIG_NETFILTER_XT_MATCH_RECENT: Recent connections tracking.
-  # - CONFIG_NETFILTER_XT_MATCH_STATE: Connection state matching.
-  # - CONFIG_NETFILTER_XT_TARGET_LOG: Logging target for firewall rules.
-  #
-  # DisplayPort output over USB-C:
-  # - CONFIG_TYPEC_DP_ALTMODE: Required for DP Alt Mode over USB-C to work.
-  # - CONFIG_TYPEC_UCSI: Unchanged, as upstream already uses `=y`.
-  configfile = stdenv.mkDerivation {
-    name = "kernel-config";
-    src = "${pmaportsSrc}/device/community/linux-postmarketos-qcom-sc7280/config-postmarketos-qcom-sc7280.aarch64";
-    dontUnpack = true;
-
-    buildPhase = ''
-      # Read the original config and apply our modifications.
-      sed \
-        -e 's/# CONFIG_DMIID is not set/CONFIG_DMIID=y/' \
-        -e 's/# CONFIG_U_SERIAL_CONSOLE is not set/CONFIG_U_SERIAL_CONSOLE=y/' \
-        -e 's/# CONFIG_USB_G_SERIAL is not set/CONFIG_USB_G_SERIAL=y/' \
-        -e 's/# CONFIG_ANDROID_BINDERFS is not set/CONFIG_ANDROID_BINDERFS=y/' \
-        -e 's/# CONFIG_NETFILTER_XT_MATCH_PKTTYPE is not set/CONFIG_NETFILTER_XT_MATCH_PKTTYPE=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_MATCH_LIMIT is not set/CONFIG_NETFILTER_XT_MATCH_LIMIT=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_MATCH_RECENT is not set/CONFIG_NETFILTER_XT_MATCH_RECENT=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_MATCH_STATE is not set/CONFIG_NETFILTER_XT_MATCH_STATE=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_TARGET_LOG is not set/CONFIG_NETFILTER_XT_TARGET_LOG=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_TARGET_CONNMARK is not set/CONFIG_NETFILTER_XT_TARGET_CONNMARK=m/' \
-        -e 's/# CONFIG_NETFILTER_XT_MATCH_CONNMARK is not set/CONFIG_NETFILTER_XT_MATCH_CONNMARK=m/' \
-        -e 's/# CONFIG_TYPEC_DP_ALTMODE is not set/CONFIG_TYPEC_DP_ALTMODE=y/' \
-        -e 's/# CONFIG_WIREGUARD is not set/CONFIG_WIREGUARD=m/' \
-        -e 's/# CONFIG_NFC is not set/CONFIG_NFC=m/' \
-        $src > config
-
-      # NFC sub-options are not present in pmOS config because CONFIG_NFC is
-      # disabled there. Append them explicitly. The FP5 CLF is a plain NCI
-      # controller over I2C (no NDLC), driven by our st21nfc-nci driver, so we
-      # enable the NCI core and that driver rather than st-nci.
-      echo 'CONFIG_NFC_NCI=m' >> config
-      echo 'CONFIG_NFC_ST21NFC_NCI=m' >> config
-
-      # EFI boot via U-Boot's UEFI environment: systemd-repart asserts the
-      # kernel supports the EFI boot stub (CONFIG_EFI_STUB=y). Force these to
-      # =y regardless of pmOS config state (disabled, module, or missing).
-      for opt in CONFIG_EFI CONFIG_EFI_STUB CONFIG_EFI_ZBOOT; do
-        if grep -q "^# ''${opt} is not set" config; then
-          sed -i "s/^# ''${opt} is not set/''${opt}=y/" config
-        elif grep -q "^''${opt}=m" config; then
-          sed -i "s/^''${opt}=m/''${opt}=y/" config
-        elif ! grep -q "^''${opt}=" config; then
-          echo "''${opt}=y" >> config
-        fi
-      done
-    '';
-
-    installPhase = ''
-      cp config $out
-    '';
+  # - DMIID:                NixOS asserts this is enabled.
+  # - U_SERIAL_CONSOLE /
+  #   USB_G_SERIAL:         USB serial gadget console for debugging.
+  # - ANDROID_BINDERFS:     Waydroid (Android container) support.
+  # - NETFILTER_XT_*:       netfilter/iptables extensions the NixOS firewall needs.
+  # - TYPEC_DP_ALTMODE:     DisplayPort Alt Mode over USB-C.
+  # - WIREGUARD:            WireGuard VPN.
+  # - NFC / NFC_NCI /
+  #   NFC_ST21NFC_NCI:      FP5 CLF is a plain NCI controller over I2C, driven by
+  #                         our st21nfc-nci driver (NCI core, not st-nci).
+  # - EFI / EFI_STUB /
+  #   EFI_ZBOOT:            EFI boot via U-Boot's UEFI env; systemd-repart asserts
+  #                         the EFI boot stub is present.
+  nixosConfig = {
+    DMIID = "y";
+    U_SERIAL_CONSOLE = "y";
+    USB_G_SERIAL = "y";
+    ANDROID_BINDERFS = "y";
+    NETFILTER_XT_MATCH_PKTTYPE = "m";
+    NETFILTER_XT_MATCH_LIMIT = "m";
+    NETFILTER_XT_MATCH_RECENT = "m";
+    NETFILTER_XT_MATCH_STATE = "m";
+    NETFILTER_XT_TARGET_LOG = "m";
+    NETFILTER_XT_TARGET_CONNMARK = "m";
+    NETFILTER_XT_MATCH_CONNMARK = "m";
+    TYPEC_DP_ALTMODE = "y";
+    WIREGUARD = "m";
+    NFC = "m";
+    NFC_NCI = "m";
+    NFC_ST21NFC_NCI = "m";
+    EFI = "y";
+    EFI_STUB = "y";
+    EFI_ZBOOT = "y";
   };
+
+  # Render the overrides into Kconfig lines. `make oldconfig` reads .config
+  # last-value-wins, so appending these after the pmOS base overrides any
+  # prior value (including "# CONFIG_X is not set").
+  overrideLines = lib.mapAttrsToList (
+    name: value: if value == "n" then "# CONFIG_${name} is not set" else "CONFIG_${name}=${value}"
+  ) nixosConfig;
+
+  # The actual .config the kernel is built with: pmOS base + our overrides.
+  # Generated purely from Nix values, so no import-from-derivation is needed.
+  configfile = runCommand "kernel-config" { } ''
+    cat ${pmosConfigUrl} > $out
+    cat >> $out <<'EOF'
+    ${lib.concatStringsSep "\n" overrideLines}
+    EOF
+  '';
+
+  # Merged config attrset for the kernel's passthru (feature queries etc.),
+  # mirroring nixpkgs' readConfig format: full CONFIG_ keys, "n" dropped.
+  mergedConfig =
+    pmosConfig
+    // lib.mapAttrs' (name: value: lib.nameValuePair "CONFIG_${name}" value) (
+      lib.filterAttrs (_: v: v != "n") nixosConfig
+    );
 
   kernelVersion.string = "7.1.2";
   modDirVersion = kernelVersion.string;
@@ -99,14 +111,21 @@ in
 linuxKernel.manualConfig {
   inherit lib;
 
-  allowImportFromDerivation = true;
+  # build.nix symlinks `configfile` to .config and runs `make oldconfig`, so
+  # it must already contain our overrides (rendered above). `config` is passed
+  # explicitly to avoid the import-from-derivation nixpkgs would otherwise use
+  # to parse a derivation-built configfile.
+  inherit configfile;
+  config = mergedConfig;
+
   # `build.nix` (manualConfig) defaults features to {} unlike generic.nix
   # which folds efiBootStub = true. systemd-repart asserts this feature
   # exists, so set it explicitly.
   features = {
     efiBootStub = true;
   };
-  inherit configfile modDirVersion;
+
+  inherit modDirVersion;
   kernelPatches = [
     {
       name = "hci-qca-drop-unused-event";
