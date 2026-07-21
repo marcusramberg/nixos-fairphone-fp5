@@ -11,8 +11,8 @@ let
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
-    rev = "v7.0.8-sc7280";
-    hash = "sha256-dU+UeCr8aVIg226ZnqryPlLuOPsKkKgR/KN/LkvHDGo=";
+    rev = "v7.1.2-sc7280";
+    hash = "sha256-Fwk51Uj/2ag/J2iAhQzrIQ55FbMCKar+XPrd4xRlmv4=";
   };
 
   # Source of postmarketOS `pmaports` repository.
@@ -89,7 +89,7 @@ let
     '';
   };
 
-  kernelVersion.string = "7.0.8";
+  kernelVersion.string = "7.1.2";
   modDirVersion = kernelVersion.string;
 in
 linuxKernel.manualConfig {
