@@ -74,14 +74,18 @@ let
       echo 'CONFIG_NFC_NCI=m' >> config
       echo 'CONFIG_NFC_ST21NFC_NCI=m' >> config
 
-      # EFI boot via U-Boot's UEFI environment: keep CONFIG_EFI/CONFIG_EFI_STUB
-      # from the pmOS config and additionally build the EFI zboot image
-      # (vmlinuz.efi) that systemd-boot loads from the ESP.
-      if grep -q '^# CONFIG_EFI_ZBOOT is not set' config; then
-        sed -i 's/^# CONFIG_EFI_ZBOOT is not set/CONFIG_EFI_ZBOOT=y/' config
-      elif ! grep -q '^CONFIG_EFI_ZBOOT=' config; then
-        echo 'CONFIG_EFI_ZBOOT=y' >> config
-      fi
+      # EFI boot via U-Boot's UEFI environment: systemd-repart asserts the
+      # kernel supports the EFI boot stub (CONFIG_EFI_STUB=y). Force these to
+      # =y regardless of pmOS config state (disabled, module, or missing).
+      for opt in CONFIG_EFI CONFIG_EFI_STUB CONFIG_EFI_ZBOOT; do
+        if grep -q "^# ''${opt} is not set" config; then
+          sed -i "s/^# ''${opt} is not set/''${opt}=y/" config
+        elif grep -q "^''${opt}=m" config; then
+          sed -i "s/^''${opt}=m/''${opt}=y/" config
+        elif ! grep -q "^''${opt}=" config; then
+          echo "''${opt}=y" >> config
+        fi
+      done
     '';
 
     installPhase = ''
@@ -96,6 +100,12 @@ linuxKernel.manualConfig {
   inherit lib;
 
   allowImportFromDerivation = true;
+  # `build.nix` (manualConfig) defaults features to {} unlike generic.nix
+  # which folds efiBootStub = true. systemd-repart asserts this feature
+  # exists, so set it explicitly.
+  features = {
+    efiBootStub = true;
+  };
   inherit configfile modDirVersion;
   kernelPatches = [
     {
