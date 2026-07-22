@@ -11,8 +11,8 @@ let
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
-    rev = "v7.1.2-sc7280";
-    hash = "sha256-Fwk51Uj/2ag/J2iAhQzrIQ55FbMCKar+XPrd4xRlmv4=";
+    rev = "sc7280-7.1.y";
+    hash = "sha256-Q4mFSrRUS1+RIoPpdTxHr1lg5Ba2H9EPGJB20yOnKT0=";
   };
 
   # Base kernel .config from postmarketOS for the `sc7280` chipset.
