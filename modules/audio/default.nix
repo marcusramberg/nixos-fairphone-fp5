@@ -64,9 +64,6 @@ in
 
       # WirePlumber config for Qualcomm audio.
       # 51-qcom.conf: Sets S16LE format, 48kHz rate, period parameters for all QCOM nodes.
-      # 52-fairphone-fp5.conf: Overrides to S32LE and enables ACP/UCM2 for the
-      # Fairphone 5 card, so the UCM HiFi verb and device EnableSequences set
-      # up the DPCM routing (BE DAI mixer switches) and mic codec routing.
       wireplumber.configPackages = [ pkgs.wireplumber-qcom ];
     };
 
