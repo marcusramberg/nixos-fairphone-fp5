@@ -161,6 +161,17 @@ linuxKernel.manualConfig {
       name = "dts-kodiak-4lane-dp-mode-switch";
       patch = ./patches/dts-kodiak-4lane-dp-mode-switch.patch;
     }
+    {
+      # SC7280/QCM6490 has only one DSPP block (DSPP_0, paired with LM_0).
+      # In a dual-display setup (internal DSI + external DP), when both CRTCs
+      # request color management, the second CRTC cannot reserve mixers with a
+      # DSPP and DP hotplug fails ("unable to find appropriate mixers", -119).
+      # Retry the reservation without DSPP so the external display works
+      # (without hw color management) rather than failing entirely.
+      # https://github.com/sc7280-mainline/linux/pull/22
+      name = "dpu-dspp-reservation-fallback";
+      patch = ./patches/dpu-dspp-reservation-fallback.patch;
+    }
   ];
   src = kernelSrc;
 
