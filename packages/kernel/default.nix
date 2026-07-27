@@ -154,6 +154,13 @@ linuxKernel.manualConfig {
       name = "dts-add-st21nfcd-nfc";
       patch = ./patches/dts-add-st21nfcd-nfc.patch;
     }
+    {
+      # Enable 4-lane DisplayPort via QMP Combo PHY mode-switch.
+      # Adds mode-switch property to the PHY, wires data-lanes=<0 1 2 3>
+      # in the SoC dtsi, and removes the now-redundant board-level override.
+      name = "dts-kodiak-4lane-dp-mode-switch";
+      patch = ./patches/dts-kodiak-4lane-dp-mode-switch.patch;
+    }
   ];
   src = kernelSrc;
 
