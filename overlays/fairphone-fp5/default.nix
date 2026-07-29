@@ -49,4 +49,11 @@ final: prev: {
 
   # Configure MAC addresses at boot for WiFi and Bluetooth.
   bootmac = final.callPackage ../../packages/bootmac { };
+
+  # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
+  # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
+  # Adds calibrated simple-IPA profiles for:
+  #   s5kjn1.yaml  - Front: Samsung S5KJN1SQ03 (Giantec GT24P128F, D-PHY)
+  #   imx858.yaml  - Wide:  Sony IMX858 (Giantec GT24P128F, Dongwoon DW9800K, D-PHY)
+  libcamera = final.callPackage ../../packages/libcamera { };
 }
