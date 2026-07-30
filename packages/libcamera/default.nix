@@ -46,6 +46,15 @@ stdenv.mkDerivation rec {
     "dev"
   ];
 
+  # Register CameraSensorHelper entries for the FP5 sensors (s5kjn1, imx858)
+  # so the soft ISP can convert gain codes; upstream ships neither.
+  # 0002 adds their CameraSensorProperties (unit cell size + sensor delays);
+  # without it libcamera warns "No static properties available".
+  patches = [
+    ./0001-add-fp5-sensor-helpers.patch
+    ./0002-add-fp5-sensor-properties.patch
+  ];
+
   postPatch = ''
     patchShebangs src/py/ utils/
   '';
