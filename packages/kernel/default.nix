@@ -182,6 +182,15 @@ linuxKernel.manualConfig {
       name = "media-fp5-sensor-crop-selection";
       patch = ./patches/media-fp5-sensor-crop-selection.patch;
     }
+    {
+      # imx858_power_on() released reset before enabling MCLK and waited only
+      # ~1ms; Sony sensors need MCLK stable before XCLR is deasserted. Cold boot
+      # worked by luck, but a runtime-PM power cycle (camera app restart) raced,
+      # NAKing the first i2c and wedging the GENI bus ("Timeout resetting
+      # RX_FSM"). Reorder to regulators -> MCLK -> settle -> release reset.
+      name = "media-imx858-power-on-ordering";
+      patch = ./patches/media-imx858-power-on-ordering.patch;
+    }
   ];
   src = kernelSrc;
 
