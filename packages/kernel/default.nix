@@ -172,6 +172,16 @@ linuxKernel.manualConfig {
       name = "dpu-dspp-reservation-fallback";
       patch = ./patches/dpu-dspp-reservation-fallback.patch;
     }
+    {
+      # libcamera probes the sensor sub-device for crop/native-size selection
+      # targets to derive the pixel array geometry. Neither FP5 sensor answered
+      # them ("the sensor kernel driver needs to be fixed"): imx858 had no
+      # .get_selection, and s5kjn1's only handled CROP/CROP_BOUNDS, reported the
+      # per-mode size, and copied width into height (8160x8160 active area).
+      # Report the full native array for all crop targets on both sensors.
+      name = "media-fp5-sensor-crop-selection";
+      patch = ./patches/media-fp5-sensor-crop-selection.patch;
+    }
   ];
   src = kernelSrc;
 
