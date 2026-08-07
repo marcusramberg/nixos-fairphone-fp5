@@ -87,7 +87,7 @@
         };
       in
       {
-        # Example images built from internal host configs for testing.
+        # Packages built from internal host configs for testing.
         packages =
           nixpkgs.lib.foldlAttrs (
             acc: name: nixosConfig:
@@ -100,9 +100,27 @@
             # U-Boot boot image; configuration-independent, flashed once.
             uboot-image = mkUbootImage exampleConfigPkgs;
           };
+
       }
     )
     // {
+      # Custom pkgs set with the fairphone-fp5 overlay applied.
+      # Use for test builds without consuming the overlay externally:
+      #   nix build .#pkgs.libcamera
+      #   nix build .#pkgs.kernel-fairphone-fp5
+      pkgs = import nixpkgs {
+        system = "aarch64-linux";
+
+        config = {
+          allowUnfree = true;
+          permittedInsecurePackages = [
+            "olm-3.2.16"
+          ];
+        };
+
+        overlays = [ (import ./overlays/fairphone-fp5) ];
+      };
+
       # Reusable library functions.
       lib = {
         inherit mkUbootImage mkDiskImage;

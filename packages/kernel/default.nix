@@ -76,6 +76,8 @@ let
     NFC = "m";
     NFC_NCI = "m";
     NFC_ST21NFC_NCI = "m";
+    NFT_FIB = "y";
+    NFT_FIB_INET = "y";
     EFI = "y";
     EFI_STUB = "y";
     EFI_ZBOOT = "y";
