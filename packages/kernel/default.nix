@@ -59,6 +59,14 @@ let
   # - EFI / EFI_STUB /
   #   EFI_ZBOOT:            EFI boot via U-Boot's UEFI env; systemd-repart asserts
   #                         the EFI boot stub is present.
+  # - TEE_QSEECOM:          Exposes QSEE trusted applications (loaded over the
+  #                         legacy QSEECOM command interface, not smcinvoke)
+  #                         through the TEE subsystem. Needed to reach the FP5
+  #                         fingerprint TA. Deps QCOM_QSEECOM, QCOM_MDT_LOADER
+  #                         and TEE are already set in the pmOS base config.
+  # - MISC_FOCALTECH_FP:     Owns the FP5 fingerprint sensor's reset, power and
+  #                         interrupt pins. The sensor's SPI bus belongs to the
+  #                         secure world, so this driver never touches it.
   nixosConfig = {
     DMIID = "y";
     U_SERIAL_CONSOLE = "y";
@@ -81,6 +89,8 @@ let
     EFI = "y";
     EFI_STUB = "y";
     EFI_ZBOOT = "y";
+    TEE_QSEECOM = "m";
+    MISC_FOCALTECH_FP = "m";
   };
 
   # Render the overrides into Kconfig lines. `make oldconfig` reads .config
@@ -192,6 +202,71 @@ linuxKernel.manualConfig {
       # RX_FSM"). Reorder to regulators -> MCLK -> settle -> release reset.
       name = "media-imx858-power-on-ordering";
       patch = ./patches/media-imx858-power-on-ordering.patch;
+    }
+    {
+      # QSEECOM TEE driver: exposes QSEE trusted applications through the TEE
+      # subsystem (/dev/tee*), so user space can load an application from
+      # /lib/firmware, open a session to it and invoke commands, and so a
+      # supplicant can answer the listener services (file service, RPMB, time)
+      # that a trusted application needs the normal world to run.
+      #
+      # QSEE is the command-based Qualcomm interface; the in-tree qcomtee
+      # driver serves the object-based smcinvoke one, and a trusted application
+      # is built against one or the other. The FP5 fingerprint application
+      # (focal32, FocalTech FT9362) answers only over QSEECOM.
+      #
+      # Squashed from the `qcom-qseecom-tee` series (42 commits, based on
+      # v7.1) by Dawid Wróbel, https://github.com/wrobelda/linux — not yet
+      # posted upstream. Also extends soc/qcom mdt_loader to assemble a
+      # split firmware image into one contiguous blob, which the driver
+      # needs to hand an application to TZ.
+      name = "tee-qseecom-driver";
+      patch = ./patches/tee-qseecom-driver.patch;
+    }
+    {
+      # QSEECOM binds only on machines in an explicit allowlist in qcom_scm.
+      # Add "fairphone,fp5".
+      name = "qcom-scm-qseecom-fp5-allowlist";
+      patch = ./patches/qcom-scm-qseecom-fp5-allowlist.patch;
+    }
+    {
+      # TZ refuses an invoke whose request is 16 bytes or more with "invalid
+      # argument", and takes the same request one byte shorter -- the boundary
+      # does not move with the response size, so what it objects to is where
+      # the response begins. The vendor HAL's shared buffer is a page-aligned
+      # request region (0x78000) followed by a page-aligned response region
+      # (0x8040), so stage the response on a page boundary too.
+      #
+      # The FP5 fingerprint application needs this: its command header is 16
+      # bytes, so every command it accepts was one the secure world refused.
+      name = "tee-qseecom-align-response";
+      patch = ./patches/tee-qseecom-align-response.patch;
+    }
+    {
+      # The fingerprint application answers in the request buffer, not the
+      # response one: it writes its result into the request header at +8 and
+      # sets bit 31 of the command id to say it answered. The driver stages
+      # the request in its own memory and copied only the response back, so
+      # that answer was dropped. Copy the request back when the client passes
+      # it as an inout memref.
+      name = "tee-qseecom-request-writeback";
+      patch = ./patches/tee-qseecom-request-writeback.patch;
+    }
+    {
+      # The FP5's fingerprint sensor is a FocalTech FT9362 in the power button.
+      # Its SPI bus belongs to the secure world, so this driver owns only what
+      # Linux is left with: the reset and power pins, and the interrupt. The
+      # trusted application expects the sensor powered and out of reset before
+      # it will talk to it.
+      name = "misc-focaltech-fp-driver";
+      patch = ./patches/misc-focaltech-fp-driver.patch;
+    }
+    {
+      # The sensor's node and its pinctrl states: reset on GPIO35, power on
+      # GPIO60, interrupt on GPIO34. Pin numbers and the pinctrl state names
+      # the driver looks up both come from the Fairphone vendor kernel.
+      name = "dts-fp5-fingerprint-sensor";
+      patch = ./patches/dts-fp5-fingerprint-sensor.patch;
     }
   ];
   src = kernelSrc;

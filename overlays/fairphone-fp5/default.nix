@@ -50,6 +50,15 @@ final: prev: {
   # Configure MAC addresses at boot for WiFi and Bluetooth.
   bootmac = final.callPackage ../../packages/bootmac { };
 
+  # Bring-up client for the FP5 fingerprint trusted application, over the
+  # QSEECOM TEE driver (see modules/fingerprint).
+  ftharness = final.callPackage ../../packages/ftharness { };
+
+  # The fingerprint sensor's trusted application, in the split form the
+  # QSEECOM TEE driver loads. Kept out of firmware-fairphone-fp5 because that
+  # package squashes every .mdt it finds into a monolithic .mbn.
+  focal32-firmware = final.callPackage ../../packages/focal32-firmware { };
+
   # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
   # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
   # Adds calibrated simple-IPA profiles for:

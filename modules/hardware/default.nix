@@ -37,6 +37,7 @@ in
 
   imports = [
     ../audio
+    ../fingerprint
     ../sensors
     ./disk-image.nix
   ];
