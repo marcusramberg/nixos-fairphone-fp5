@@ -11,18 +11,21 @@ The Fairphone 5 uses a Qualcomm QCM6490 SoC, which is based on the ARM architect
 
 ## Current Status
 
-- Kernel: 6.17.0
+- Kernel: 7.1.2
 
 ### Supported Hardware
 
-- Audio: Both speakers and microphone are broken
+- Audio: Works
 - Battery: Works
 - Bluetooth: Works (with audio support)
 - Camera: Selfie and wide-angle cameras work (quality is not amazing)
+  - libcamera patches backported from postmarketos
 - Cellular modem: Works
 - Screen: Works
 - Touchscreen: Works
 - Wi-Fi: Works
+- SPI works
+- uboot working
 
 Additional details will be added here as development progresses.
 
@@ -106,7 +109,7 @@ If you want to use NixOS your own Fairphone 5, the images built from the example
 
 If you added the image packages as shown above, you can simply build the images using the following commands:
 
-3. Build the U-Boot boot image (locally on an `aarch64-linux` host):
+1. Build the U-Boot boot image (locally on an `aarch64-linux` host):
 
 ```sh
 nix build .#packages.aarch64-linux.uboot-image
@@ -118,13 +121,13 @@ Or in case you want to use nixbuild.net as a remote builder, the command is slig
 nix build .#packages.aarch64-linux.uboot-image --max-jobs 0 --builders "ssh://eu.nixbuild.net aarch64-linux - 100 1 big-parallel,benchmark" --option builders-use-substitutes true
 ```
 
-4. The previous command should output a symlink called `result`, which points to the boot image you just built. You can flash the image to the phone's boot partition as follows (this only needs to be done once; U-Boot is independent of your NixOS configuration):
+1. The previous command should output a symlink called `result`, which points to the boot image you just built. You can flash the image to the phone's boot partition as follows (this only needs to be done once; U-Boot is independent of your NixOS configuration):
 
 ```sh
 nix shell nixpkgs#android-tools -c fastboot flash boot result
 ```
 
-5. Build the disk image (locally on an `aarch64-linux` host):
+1. Build the disk image (locally on an `aarch64-linux` host):
 
 ```sh
 nix build .#packages.aarch64-linux.disk-image
@@ -136,13 +139,13 @@ Or in case you want to use nixbuild.net as a remote builder:
 nix build .#packages.aarch64-linux.disk-image --max-jobs 0 --builders "ssh://eu.nixbuild.net aarch64-linux - 100 1 big-parallel,benchmark" --option builders-use-substitutes true
 ```
 
-6. The previous command should again output a symlink called `result`, which points to a directory containing the disk image (`image.raw`). You can flash the image to the phone's userdata partition as follows:
+1. The previous command should again output a symlink called `result`, which points to a directory containing the disk image (`image.raw`). You can flash the image to the phone's userdata partition as follows:
 
 ```sh
 nix shell nixpkgs#android-tools -c fastboot flash userdata result/image.raw
 ```
 
-7. Now that both images are flashed, you can reboot the device:
+1. Now that both images are flashed, you can reboot the device:
 
 ```sh
 nix shell nixpkgs#android-tools -c fastboot reboot
