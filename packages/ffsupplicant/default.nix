@@ -37,14 +37,18 @@ stdenv.mkDerivation {
       before they ever cross this boundary, which is why the I/O can be
       delegated to an ordinary process.
 
-      Work in progress. The fingerprint application's storage turns out to go
-      to RPMB (listener 0x2000) rather than to a file service: the path in its
-      error messages names an object inside TrustZone's own filesystem layer,
-      not a file the normal world is asked to open. Serving RPMB means relaying
-      512-byte frames -- which the secure world builds and MACs itself -- to
-      the UFS RPMB well-known LUN, reachable at /dev/bsg/0:0:0:49476. That
-      relay is not implemented yet; today this registers services, answers the
-      gpfile probe, and dumps whatever else arrives.
+      Two services are served. RPMB (listener 8192) relays 512-byte frames --
+      built and MACed by the secure world -- to the UFS RPMB well-known LUN at
+      /dev/bsg/0:0:0:49476. The GlobalPlatform file service (listener 28672)
+      carries the sealed objects the application persists: its templates, its
+      chip calibration and its serial id, rooted under a directory given by
+      --store. Both message layouts follow Qualcomm's own listener
+      implementations in qualcomm/minkipc.
+
+      This is what a fingerprint surviving a reboot depends on: with the file
+      service unimplemented the application's saves fail with an I/O error, and
+      with it, a template written before a power cycle is read back after
+      one.
 
       Needs root, for /dev/teepriv0.
     '';

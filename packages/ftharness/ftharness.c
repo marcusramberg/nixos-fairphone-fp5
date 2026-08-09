@@ -91,6 +91,25 @@ static const struct { uint32_t cmd; uint32_t len; } ff_payload_len[] = {
 	{ 0x1019, 4 },     { 0x101b, 8 },     { 0x101c, 4 },
 	{ 0x101d, 4 },     { 0x1021, 4 },     { 0x1023, 0 },
 	{ 0x101e, 4 },     { 0x101f, 4 },     { 0x1020, 0x24 },
+
+	/*
+	 * SYNC_TEMPLATE. Not in the HAL's constant table, because
+	 * ff_trustlet_sync_template sizes its message at run time: it mallocs
+	 * the template's own length plus 0x18 and sends that as the payload,
+	 * with two words at the front. 0x18 is therefore what an empty template
+	 * list costs, which is the case that matters on a device with nothing
+	 * enrolled yet.
+	 */
+	{ 0x1010, 0x18 },
+
+	/*
+	 * SET_ACTIVE_GROUP, likewise sized at run time by the HAL: a group id
+	 * followed by the NUL-terminated store path, so strlen(path) + 5. The
+	 * application reads the id from the first word and treats the rest as a
+	 * C string, so a fixed, generously sized payload with the path poked in
+	 * and zero padding after it says the same thing.
+	 */
+	{ 0x2007, 0x40 },
 };
 
 /*
@@ -371,6 +390,8 @@ static void strings(const void *buf, size_t len)
  * command here needs.
  */
 static size_t req_pad;
+/* Bytes of the written-back request payload to dump; 0 disables it. */
+static size_t req_show;
 
 /*
  * A string payload, for the commands that take one. SYNC_CONFIG (0x1011) is
@@ -462,6 +483,21 @@ static char *slurp(const char *path)
 	return buf;
 }
 
+/*
+ * The payload the last command answered with, kept so a later step in the same
+ * sequence can look at it. "skipz:OFF" needs this: the application reports
+ * whether a capture actually produced an image in its own payload, and a
+ * sequence has to be able to act on that.
+ */
+#define FF_LAST_PAYLOAD	256
+static uint8_t last_payload[FF_LAST_PAYLOAD];
+static size_t last_payload_len;
+
+/* The session's one shared buffer; see the comment where it is allocated. */
+static struct shm shm_req, shm_rsp;
+static size_t shm_req_cap, shm_rsp_cap;
+static int shm_ready;
+
 static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 		       uint32_t arg_val, size_t rsp_size, const char *str,
 		       const struct poke *pk, unsigned int npk)
@@ -492,8 +528,47 @@ static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 	if (rsp_size < FF_RSP_MIN)
 		rsp_size = FF_RSP_MIN;
 
-	if (shm_alloc(fd, req_size, &req) || shm_alloc(fd, rsp_size, &rsp))
+	/*
+	 * One buffer for the whole session, not one per command.
+	 *
+	 * The application keeps pointers into this memory across commands:
+	 * ff_trustlet_update_template stores a param_data pointer in a global,
+	 * and ff_trustlet_capture_image asserts outright that the context it is
+	 * handed *is* the vendor's own buffer --
+	 *
+	 *   assertion '(uint8_t *)capture_ctx == g_builtin_buffer->usr' failed
+	 *
+	 * -- so the HAL's ff_builtin_user_buffer_lock() hands back the same
+	 * region every time. A fresh region per command leaves those pointers
+	 * addressing memory the secure world no longer has, which is the shape
+	 * of a fault that only appears once something dereferences what an
+	 * earlier command stored.
+	 */
+	if (!shm_ready) {
+		if (shm_alloc(fd, req_size, &shm_req) ||
+		    shm_alloc(fd, rsp_size, &shm_rsp))
+			return -1;
+		shm_req_cap = req_size;
+		shm_rsp_cap = rsp_size;
+		shm_ready = 1;
+	} else if (req_size > shm_req_cap || rsp_size > shm_rsp_cap) {
+		fprintf(stderr,
+			"0x%04x wants %zu/%zu but the session's buffer is "
+			"%zu/%zu -- raise --req/--rsp so one buffer serves "
+			"every command\n", cmd_id, req_size, rsp_size,
+			shm_req_cap, shm_rsp_cap);
 		return -1;
+	}
+
+	req = shm_req;
+	rsp = shm_rsp;
+
+	/*
+	 * Only the header and this command's payload are cleared. Whatever a
+	 * previous command left further into the buffer stays, which is what
+	 * the vendor does -- it memsets just the context it is about to fill.
+	 */
+	memset(rsp.va, 0, rsp_size);
 
 	/*
 	 * ff_transfer_header_t, as the vendor client builds it in
@@ -523,6 +598,13 @@ static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 				plen, req_size);
 			return -1;
 		}
+
+		/*
+		 * The buffer is reused, so clear what this command owns --
+		 * the header and its own payload. shm_alloc() used to do this
+		 * by handing out fresh memory every time.
+		 */
+		memset(req.va, 0, FF_HEADER_SIZE + plen);
 
 		((uint32_t *)req.va)[0] = cmd_id;
 		((uint32_t *)req.va)[1] = plen;
@@ -580,6 +662,16 @@ static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 	if (ioctl(fd, TEE_IOC_INVOKE, &bd)) {
 		fprintf(stderr, "INVOKE(0x%04x): %s\n", cmd_id,
 			strerror(errno));
+
+		/*
+		 * The application writes its log into the response region as it
+		 * runs, so whatever it managed before it died is still sitting
+		 * there. The last line is where it got to -- the only view we
+		 * have into a command that never returns.
+		 */
+		printf("  the application's log up to the point it died:\n");
+		strings(rsp.va, rsp_size);
+		fflush(stdout);
 		return -1;
 	}
 
@@ -587,6 +679,12 @@ static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 		size_t show = rsp_size > 256 ? 256 : rsp_size;
 		uint32_t back = ((uint32_t *)req.va)[0];
 		uint32_t result = ((uint32_t *)req.va)[2];
+		size_t keep = req_size - FF_HEADER_SIZE;
+
+		if (keep > FF_LAST_PAYLOAD)
+			keep = FF_LAST_PAYLOAD;
+		memcpy(last_payload, (uint8_t *)req.va + FF_HEADER_SIZE, keep);
+		last_payload_len = keep;
 
 		printf("cmd 0x%04x: arg.ret=0x%x origin=0x%x\n", cmd_id,
 		       buf.arg.ret, buf.arg.ret_origin);
@@ -601,6 +699,22 @@ static int invoke_full(int fd, uint32_t session, uint32_t cmd_id, int have_arg,
 		else
 			printf("  no answer written back (id reads 0x%08x)\n",
 			       back);
+		/*
+		 * The application answers in the request buffer, and for the
+		 * commands that report something -- REPORT_EVENT above all --
+		 * the answer is a structure at the payload offset, not the
+		 * status word. The response region carries the application's
+		 * log stream instead, so this is the only place that data
+		 * appears.
+		 */
+		if (req_show) {
+			size_t room = req_size - FF_HEADER_SIZE;
+			size_t n = req_show > room ? room : req_show;
+
+			printf("  request payload[0..%zu] (written back):\n", n);
+			dump((uint8_t *)req.va + FF_HEADER_SIZE, n);
+		}
+
 		decode(rsp.va);
 		printf("  reply[0..%zu]:\n", show);
 		dump(rsp.va, show);
@@ -704,6 +818,7 @@ static int run_seq(int fd, uint32_t session, const char *spec)
 	char *copy = strdup(spec);
 	char *save = NULL, *tok;
 	int last = 0;
+	int skipping = 0;
 
 	if (!copy)
 		return -1;
@@ -758,6 +873,53 @@ static int run_seq(int fd, uint32_t session, const char *spec)
 			have = 1;
 		}
 
+		/*
+		 * "wait:N" pauses N seconds without leaving the session. The
+		 * application's REPORT_EVENT only has something to report once
+		 * the sensor has actually raised its interrupt, and a finger
+		 * arrives on human time -- so the wait has to happen between
+		 * two commands of the same session, not between runs, which
+		 * would re-initialise the chip and clear what we came to read.
+		 */
+		if (!strcmp(tok, "wait")) {
+			/* A wait starts the next touch, so it ends a skip. */
+			skipping = 0;
+			printf("\n== wait %us -- touch the sensor now\n", arg);
+			fflush(stdout);
+			sleep(arg);
+			continue;
+		}
+
+		/*
+		 * "skipz:OFF" abandons the rest of this touch when the word at
+		 * payload offset OFF of the previous command reads zero.
+		 *
+		 * CAPTURE_IMAGE reports at +0x20 whether it actually produced
+		 * an image, and the vendor HAL tests exactly that before it
+		 * goes on. Reporting a touch the application has no image for
+		 * sends it into do_enroll, which dereferences a pointer a
+		 * capture was supposed to have set -- and kills it.
+		 */
+		if (!strcmp(tok, "skipz")) {
+			uint32_t word = 0;
+
+			if (arg + 4 <= last_payload_len)
+				memcpy(&word, last_payload + arg, 4);
+
+			if (!word) {
+				printf("\n== payload +0x%x is zero -- skipping "
+				       "the rest of this touch\n", arg);
+				fflush(stdout);
+				skipping = 1;
+			}
+			continue;
+		}
+
+		if (skipping) {
+			printf("   (skipped %s)\n", tok);
+			continue;
+		}
+
 		cmd = strtoul(tok, NULL, 0);
 		if (!cmd) {
 			fprintf(stderr, "bad command '%s' in --seq\n", tok);
@@ -769,6 +931,24 @@ static int run_seq(int fd, uint32_t session, const char *spec)
 		last = invoke_full(fd, session, cmd, have, arg, FF_RSP_DEFAULT,
 				   str ? str : req_str,
 				   tnpk ? tpk : pokes, tnpk ? tnpk : npokes);
+
+		/*
+		 * -1 is the ioctl itself failing, which means the session is
+		 * gone: the application has died and every command after this
+		 * one answers "INVOKE: Invalid argument" too. Carrying on
+		 * prints a screenful of identical failures and buries the one
+		 * that mattered, so stop at the first. A refusal the
+		 * application spells out (1) is not this -- those are often
+		 * the expected answer -- and the sequence continues.
+		 */
+		if (last < 0) {
+			fprintf(stderr,
+				"0x%04x killed the session, stopping the "
+				"sequence here\n", cmd);
+			fflush(stdout);
+			free(copy);
+			return -1;
+		}
 	}
 
 	free(copy);
@@ -785,9 +965,14 @@ static void usage(void)
 		"  --str S      send S as the payload, terminator included\n"
 		"  --str-file F send F's contents as the payload\n"
 		"  --req N      request region capacity (default %d)\n"
+		"  --show-req N dump N bytes of the request payload after the\n"
+		"               call -- where REPORT_EVENT leaves its answer\n"
 		"  --rsp N      response region capacity (default %d)\n"
 		"  --poke O=V   write word V at payload offset O (repeatable)\n"
 		"  --seq LIST   run cmd[:arg][@file][+off=val],... in one\n"
+		"               session; 'wait:N' pauses N seconds mid-session\n"
+		"               and 'skipz:OFF' abandons the rest of a touch\n"
+		"               when the last payload's word at OFF is zero\n"
 		"               session, e.g. 0x100e+0=1,0x100a:1\n"
 		"  (old form)   cmd[:arg][@file],... e.g.\n"
 		"               0x1008:2000000,0x1011@cfg.json,0x100a:1\n"
@@ -836,6 +1021,8 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp(argv[i], "--req") && i + 1 < argc)
 			req_pad = strtoul(argv[++i], NULL, 0);
+		else if (!strcmp(argv[i], "--show-req") && i + 1 < argc)
+			req_show = strtoul(argv[++i], NULL, 0);
 		else if (!strcmp(argv[i], "--rsp") && i + 1 < argc)
 			rsp_size = strtoul(argv[++i], NULL, 0);
 		else if (!strcmp(argv[i], "--poke") && i + 1 < argc) {

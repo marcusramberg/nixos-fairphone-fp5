@@ -54,6 +54,11 @@ final: prev: {
   # QSEECOM TEE driver (see modules/fingerprint).
   ftharness = final.callPackage ../../packages/ftharness { };
 
+  # Serves QSEECOM listener services, which is how a trusted application
+  # reaches its secure storage -- RPMB, in the fingerprint application's case.
+  # Without it no template can be persisted, so nothing can be enrolled.
+  ffsupplicant = final.callPackage ../../packages/ffsupplicant { };
+
   # The fingerprint sensor's trusted application, in the split form the
   # QSEECOM TEE driver loads. Kept out of firmware-fairphone-fp5 because that
   # package squashes every .mdt it finds into a monolithic .mbn.

@@ -23,10 +23,19 @@
 # *string*; an integer is rejected with "expect 'JSON_STRING' but got
 # 'JSON_INTEGER'".
 #
-# It is not yet a fingerprint stack: nothing here enrols or matches. The
-# sensor's interrupt (gpio34) does fire once the application is scanning; the
-# `focaltech-fp` driver arms it with FF_IOC_ENABLE_IRQ and reports edges through
-# poll()/read() on /dev/focaltech_fp.
+# The sensor's interrupt works, but only once finger detection is armed:
+# START_SCANNING leaves the chip imaging without watching for a finger, and
+# CONFIG_DEVICE_WORK_MODE(FDT_DOWN_DETECT) is what arms it -- see initSequence
+# below. With that done, gpio34 goes high on finger-down and low on release,
+# and the `focaltech-fp` driver reports both through poll()/read() on
+# /dev/focaltech_fp once userspace arms the line with FF_IOC_ENABLE_IRQ. The
+# driver requests the interrupt with IRQF_NO_AUTOEN, so nothing arrives until
+# something opens the device: watching /proc/interrupts alone shows nothing no
+# matter how hard the sensor is pressed.
+#
+# It is still not a fingerprint stack: nothing here enrols or matches. Enrolment
+# additionally needs the application's secure storage, which it reaches over
+# RPMB through a supplicant -- see packages/ffsupplicant.
 #
 # The trusted application is proprietary and ships in no public firmware set:
 # FairBlobs/FP5-firmware carries adsp, cdsp, modem, wpss and the GPU zap
@@ -55,13 +64,21 @@ let
     "0x100a:1" # probe_device  -> binds a chip module
     "0x100b" # init_device
     "0x1004" # trustlet_init
+    "0x1012" # start_scanning
+    # config_device_work_mode(FDT_DOWN_DETECT). Scanning alone leaves the chip
+    # imaging but not watching for a finger: gpio34 never moves and no event is
+    # ever raised. This is the step that arms detection, and the application
+    # acknowledges it with "switch to 'FDT_DOWN_DETECT' mode." (0 is SLEEP,
+    # 2 is FDT_UP_DETECT).
+    "0x101f:1"
   ];
 
   fp5-fp-init = pkgs.writeShellScriptBin "fp5-fp-init" ''
     # Bring the trusted application up to the point where the sensor is
-    # calibrated and scanning. Appends any arguments to the sequence, so
-    #   fp5-fp-init 0x1012,0x1013
-    # starts scanning and captures a frame.
+    # calibrated, scanning, and armed for finger detection. Appends any
+    # arguments to the sequence, so
+    #   fp5-fp-init 0x1013
+    # captures a frame on top of that.
     set -eu
     seq=${lib.escapeShellArg initSequence}
     if [ "$#" -gt 0 ]; then
@@ -90,7 +107,7 @@ in
       reach to the Fairphone 5 fingerprint trusted application over the QSEECOM
       TEE driver. This loads the kernel driver and installs `ftharness`; it does
       not give you working fingerprint authentication, which additionally needs
-      a supplicant for the application's file service
+      a supplicant serving the application's secure storage over RPMB
     '';
 
     appName = lib.mkOption {
@@ -181,6 +198,54 @@ in
       '';
     };
 
+    supplicant = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Run {command}`ffsupplicant`, which serves the listener services the
+          trusted application uses to reach its secure storage.
+
+          The application blocks until the normal world answers a storage
+          request, so without this nothing can be enrolled: reads and writes
+          fail and it reports an I/O error. The supplicant is not trusted with
+          anything -- objects are encrypted and, for RPMB, authenticated by the
+          secure world before they cross this boundary.
+        '';
+      };
+
+      listeners = lib.mkOption {
+        type = lib.types.listOf lib.types.int;
+        default = [
+          8192
+          28672
+        ];
+        defaultText = lib.literalExpression "[ 8192 28672 ]";
+        description = ''
+          Listener services to offer, by id.
+
+          8192 (0x2000) is RPMB, where the fingerprint application's storage
+          actually goes. 28672 (0x7000) is "gpfile system services", which the
+          secure world probes on the way there and which must be answered for
+          the application to get as far as its storage.
+
+          These have to be served by one process: the kernel hands requests to
+          whichever context receives first, so a second supplicant would be
+          refused. TrustZone also caps how many listeners exist at once, so
+          offer only what is needed.
+        '';
+      };
+
+      verbose = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Log every request and reply, including a hex dump of the shared
+          buffer. Useful when decoding a listener protocol, noisy otherwise.
+        '';
+      };
+    };
+
     group = lib.mkOption {
       type = lib.types.str;
       default = "tee";
@@ -217,7 +282,38 @@ in
 
     environment.systemPackages = [
       pkgs.ftharness
+      pkgs.ffsupplicant
       fp5-fp-init
     ];
+
+    # Serves the listeners the trusted application needs to reach its secure
+    # storage. Without this the application cannot read or write a template, so
+    # nothing can be enrolled and there is nothing to match against; the
+    # storage calls simply fail and the application reports an I/O error.
+    #
+    # This is the same arrangement as rmtfs and tqftpserv in modules/modem --
+    # a normal-world daemon doing I/O for a peer that cannot do its own -- but
+    # the peer here is TrustZone, reached by SMC through /dev/teepriv0, not a
+    # remote processor over QRTR.
+    systemd.services.ffsupplicant = lib.mkIf cfg.supplicant.enable {
+      description = "QSEECOM listener supplicant (fingerprint secure storage)";
+      wantedBy = [ "multi-user.target" ];
+
+      # The listeners are registered through the QSEECOM TEE device, which only
+      # exists once that driver has bound.
+      after = [ "systemd-udev-settle.service" ];
+
+      serviceConfig = {
+        ExecStart = "${lib.getExe pkgs.ffsupplicant} ${
+          lib.concatMapStringsSep " " (id: "--listener ${toString id}")
+            cfg.supplicant.listeners
+        }${lib.optionalString cfg.supplicant.verbose " -v"}";
+        Restart = "always";
+        RestartSec = "1";
+
+        # /dev/teepriv0 requires CAP_SYS_ADMIN, and the RPMB LUN is root-only.
+        User = "root";
+      };
+    };
   };
 }
