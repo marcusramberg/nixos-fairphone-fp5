@@ -48,7 +48,11 @@ let
   #
   # - DMIID:                NixOS asserts this is enabled.
   # - U_SERIAL_CONSOLE /
-  #   USB_G_SERIAL:         USB serial gadget console for debugging.
+  #   USB_G_SERIAL:         USB serial gadget console for debugging. A module,
+  #                         not built in: a legacy gadget driver binds the UDC
+  #                         when it registers and there is no way to take it
+  #                         back, so built in it owns a600000.usb from boot and
+  #                         every configfs gadget fails to bind with -EBUSY
   # - ANDROID_BINDERFS:     Waydroid (Android container) support.
   # - NETFILTER_XT_*:       netfilter/iptables extensions the NixOS firewall needs.
   # - TYPEC_DP_ALTMODE:     DisplayPort Alt Mode over USB-C.
@@ -70,7 +74,7 @@ let
   nixosConfig = {
     DMIID = "y";
     U_SERIAL_CONSOLE = "y";
-    USB_G_SERIAL = "y";
+    USB_G_SERIAL = "m";
     ANDROID_BINDERFS = "y";
     NETFILTER_XT_MATCH_PKTTYPE = "m";
     NETFILTER_XT_MATCH_LIMIT = "m";
