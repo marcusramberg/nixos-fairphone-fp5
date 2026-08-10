@@ -1,0 +1,25 @@
+Detect systemd the way systemd does, and call systemctl by store path.
+
+usb-signaller decides which init system it is on by testing for
+/usr/bin/systemctl, a path NixOS does not have, so it falls through to the
+OpenRC check and then to "Unsupported init system, cannot start service" --
+which means the per-mode services (usb-signaller-developer-mode and friends)
+are never started or stopped, and an NCM gadget binds with no address on it.
+
+Test /run/systemd/system instead, which is what sd_booted() looks at, and
+invoke systemctl by absolute path since the daemon runs from a unit with no
+inherited PATH to speak of. @systemctl@ is substituted at build time.
+
+--- a/src/service.rs	2026-08-10 22:43:22.622117726 +0200
++++ b/src/service.rs	2026-08-10 22:43:22.641336429 +0200
+@@ -23,8 +23,8 @@
+     let result;
+ 
+     /* Systemd */
+-    if PathBuf::from("/usr/bin/systemctl").exists() {
+-        result = Command::new("systemctl").args([command, service]).output();
++    if PathBuf::from("/run/systemd/system").exists() {
++        result = Command::new("@systemctl@").args([command, service]).output();
+         if result.is_err() || !result?.status.success() {
+             return Err(anyhow::anyhow!(
+                 "Failed to start systemd service: {service}"

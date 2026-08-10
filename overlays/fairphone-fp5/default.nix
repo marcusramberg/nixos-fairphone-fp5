@@ -79,6 +79,10 @@ final: prev: {
     libfprint = prev.libfprint;
   };
 
+  # USB gadget daemon: composes the configfs gadget itself and switches modes
+  # at runtime over usb-moded's D-Bus interface (see modules/usb-signaller).
+  usb-signaller = final.callPackage ../../packages/usb-signaller { };
+
   # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
   # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
   # Adds calibrated simple-IPA profiles for:
