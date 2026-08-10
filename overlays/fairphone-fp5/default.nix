@@ -55,9 +55,17 @@ final: prev: {
   ftharness = final.callPackage ../../packages/ftharness { };
 
   # Serves QSEECOM listener services, which is how a trusted application
-  # reaches its secure storage -- RPMB, in the fingerprint application's case.
-  # Without it no template can be persisted, so nothing can be enrolled.
+  # reaches its secure storage: RPMB for authenticated frames, and the
+  # GlobalPlatform file service for the sealed objects it persists. Without it
+  # no template can be written, so nothing can be enrolled.
   ffsupplicant = final.callPackage ../../packages/ffsupplicant { };
+
+  # Reads TrustZone's diagnostic and application logs. A debugging aid: without
+  # the application log, a trusted application that faults says nothing Linux
+  # can see.
+  qcom-tzlog = final.callPackage ../../packages/tzlog {
+    kernel = final.kernel-fairphone-fp5;
+  };
 
   # The fingerprint sensor's trusted application, in the split form the
   # QSEECOM TEE driver loads. Kept out of firmware-fairphone-fp5 because that

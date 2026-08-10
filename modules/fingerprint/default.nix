@@ -156,12 +156,32 @@ in
         driver.spi_bus_num = 14;
         device.spi_default_bps = 2000000;
         device.preferred_device_id = "0x9391";
+
+        common.image_processing_cols = 36;
+        common.image_processing_rows = 144;
+        common.max_enrolling_fingers = 5;
+        common.max_enrolling_samples = 8;
+
+        algorithm.min_enrolling_quality_threshold = 30;
+        algorithm.min_enrolling_coverage_threshold = 30;
+        algorithm.min_identify_quality_threshold = 30;
+        algorithm.min_identify_coverage_threshold = 30;
       };
       defaultText = lib.literalExpression ''
         {
           driver.spi_bus_num = 14;
           device.spi_default_bps = 2000000;
           device.preferred_device_id = "0x9391";
+
+          common.image_processing_cols = 36;
+          common.image_processing_rows = 144;
+          common.max_enrolling_fingers = 5;
+          common.max_enrolling_samples = 8;
+
+          algorithm.min_enrolling_quality_threshold = 30;
+          algorithm.min_enrolling_coverage_threshold = 30;
+          algorithm.min_identify_quality_threshold = 30;
+          algorithm.min_identify_coverage_threshold = 30;
         }
       '';
       example = lib.literalExpression ''
@@ -191,6 +211,18 @@ in
           is the sensor's.
         - `device.preferred_device_id` -- which chip module to bind, as a string.
           Without it the probe never gets past `ft9601` and always returns -11.
+        - `common.image_processing_cols` and `_rows` -- the sensor's geometry,
+          36 x 144. Read with a default of zero, and zero sizes an allocation
+          to nothing, which the application then dereferences.
+        - `common.max_enrolling_fingers` -- also zero by default, which refuses
+          every enrolment and leaves no template slots to load.
+        - `common.max_enrolling_samples` -- how many counted samples an
+          enrolment needs. Deliberately small: the counter only falls for a
+          touch that adds new coverage while the sample cap counts every
+          accepted one, so a large value can exhaust the cap before the counter
+          reaches zero and the enrolment can never finish.
+        - `algorithm.min_*_threshold` -- quality and coverage floors. Zero
+          accepts nothing.
 
         Everything else falls back to the application's built-in defaults. The
         vendor's own file, worth pulling from a stock device for its tuned
@@ -211,6 +243,22 @@ in
           fail and it reports an I/O error. The supplicant is not trusted with
           anything -- objects are encrypted and, for RPMB, authenticated by the
           secure world before they cross this boundary.
+        '';
+      };
+
+      store = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/ffsupplicant";
+        description = ''
+          Where the sealed objects the trusted application persists are kept:
+          its templates, its chip calibration and its serial id.
+
+          The application asks for Android paths under `/data/vendor_de`, which
+          mean nothing here, so every name is rooted under this directory. The
+          contents are sealed by the secure world before they arrive and are
+          useless without the device that sealed them, but they are still the
+          enrolled fingerprints -- delete this directory and the fingers are
+          gone.
         '';
       };
 
@@ -246,6 +294,26 @@ in
       };
     };
 
+    tzlog = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Build and load {command}`qcom_tzlog`, which exposes TrustZone's
+        diagnostic area at `/sys/kernel/debug/tzlog/raw` and QSEE's application
+        log at `/sys/kernel/debug/tzlog/qsee`.
+
+        The application log is the useful one: it stays empty until a buffer is
+        registered with QSEE, so a trusted application that faults is otherwise
+        invisible from Linux -- the SCM call returns an error the kernel has no
+        name for and nothing else is recorded anywhere. With it, the
+        application names the last function it entered.
+
+        Off by default. It maps memory the secure world owns and hands it to
+        user space, which is a reasonable thing to do while working on a
+        trusted application and not otherwise.
+      '';
+    };
+
     group = lib.mkOption {
       type = lib.types.str;
       default = "tee";
@@ -266,7 +334,7 @@ in
     # autoloads it: it binds to the QSEECOM platform device that qcom_scm
     # registers, and only on a machine in the SCM allowlist (see the
     # `qcom-scm-qseecom-fp5-allowlist` kernel patch).
-    boot.kernelModules = [ "qseecomtee" ];
+    boot.kernelModules = [ "qseecomtee" ] ++ lib.optional cfg.tzlog "qcom_tzlog";
 
     hardware.firmware = [ firmware ];
 
@@ -279,6 +347,8 @@ in
     '';
 
     environment.etc."focaltech/ff_config.json".source = configFile;
+
+    boot.extraModulePackages = lib.optional cfg.tzlog pkgs.qcom-tzlog;
 
     environment.systemPackages = [
       pkgs.ftharness
@@ -304,15 +374,20 @@ in
       after = [ "systemd-udev-settle.service" ];
 
       serviceConfig = {
-        ExecStart = "${lib.getExe pkgs.ffsupplicant} ${
-          lib.concatMapStringsSep " " (id: "--listener ${toString id}")
-            cfg.supplicant.listeners
+        ExecStart = "${lib.getExe pkgs.ffsupplicant} --store ${cfg.supplicant.store} ${
+          lib.concatMapStringsSep " " (id: "--listener ${toString id}") cfg.supplicant.listeners
         }${lib.optionalString cfg.supplicant.verbose " -v"}";
         Restart = "always";
         RestartSec = "1";
 
         # /dev/teepriv0 requires CAP_SYS_ADMIN, and the RPMB LUN is root-only.
         User = "root";
+
+        # Create the store if it is the default location under /var/lib, so a
+        # first boot has somewhere to put the objects. A store elsewhere is the
+        # administrator's to create.
+        StateDirectory = lib.mkIf (cfg.supplicant.store == "/var/lib/ffsupplicant") "ffsupplicant";
+        StateDirectoryMode = "0700";
       };
     };
   };
