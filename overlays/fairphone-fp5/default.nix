@@ -72,6 +72,13 @@ final: prev: {
   # package squashes every .mdt it finds into a monolithic .mbn.
   focal32-firmware = final.callPackage ../../packages/focal32-firmware { };
 
+  # libfprint carrying the FocalTech QSEE driver, so fprintd can see the
+  # sensor. Overridden rather than added, so fprintd and GNOME get it without
+  # knowing anything about this device.
+  libfprint = final.callPackage ../../packages/libfprint {
+    libfprint = prev.libfprint;
+  };
+
   # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
   # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
   # Adds calibrated simple-IPA profiles for:

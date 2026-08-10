@@ -157,6 +157,8 @@ in
         device.spi_default_bps = 2000000;
         device.preferred_device_id = "0x9391";
 
+        trustlet.enable_trusted_enrollment = false;
+
         common.image_processing_cols = 36;
         common.image_processing_rows = 144;
         common.max_enrolling_fingers = 5;
@@ -172,6 +174,8 @@ in
           driver.spi_bus_num = 14;
           device.spi_default_bps = 2000000;
           device.preferred_device_id = "0x9391";
+
+          trustlet.enable_trusted_enrollment = false;
 
           common.image_processing_cols = 36;
           common.image_processing_rows = 144;
@@ -223,6 +227,13 @@ in
           reaches zero and the enrolment can never finish.
         - `algorithm.min_*_threshold` -- quality and coverage floors. Zero
           accepts nothing.
+        - `trustlet.enable_trusted_enrollment` -- left on, the application
+          refuses every enrolment with -208 unless it is given a credential
+          token signed by Android's Gatekeeper, which nothing on a Linux system
+          can produce. Turning it off means the application no longer requires
+          proof that a user authenticated before a finger is added, so whatever
+          can reach the application can enrol one. That check has to come from
+          above it -- polkit, in front of fprintd.
 
         Everything else falls back to the application's built-in defaults. The
         vendor's own file, worth pulling from a stock device for its tuned
@@ -293,6 +304,21 @@ in
         '';
       };
     };
+
+    fprintd = lib.mkEnableOption ''
+      {command}`fprintd`, which is what turns the reach this module provides
+      into fingerprint authentication: enrolment with {command}`fprintd-enroll`,
+      and unlocking through the `fprintd` PAM module wherever
+      {option}`security.pam.services.<name>.fprintAuth` is set.
+
+      This pulls in a libfprint carrying the FocalTech QSEE driver (see
+      packages/libfprint); nixpkgs' own libfprint has no driver that can see
+      this sensor, and would find no device at all.
+
+      Enrolment reaches the trusted application directly, so it needs the
+      supplicant running and the application present -- the same requirements
+      {command}`ftharness` has
+    '';
 
     tzlog = lib.mkOption {
       type = lib.types.bool;
@@ -388,6 +414,68 @@ in
         # administrator's to create.
         StateDirectory = lib.mkIf (cfg.supplicant.store == "/var/lib/ffsupplicant") "ffsupplicant";
         StateDirectoryMode = "0700";
+      };
+    };
+
+    # fprintd owns enrolment and matching; the driver in packages/libfprint is
+    # what lets it see this sensor at all.
+    services.fprintd.enable = cfg.fprintd;
+
+    # fprintd's unit ships a device whitelist covering the buses fingerprint
+    # readers usually hang off -- USB, SPI, hidraw -- and this sensor is on
+    # none of them. It is reached through the misc node the kernel driver
+    # registers and the TEE client device, and without both the daemon opens
+    # neither: the sensor node fails with EPERM and the device looks broken
+    # rather than forbidden. DeviceAllow appends, so this widens the list
+    # rather than replacing it.
+    systemd.services.fprintd.serviceConfig.DeviceAllow = lib.mkIf cfg.fprintd [
+      "/dev/focaltech_fp rw"
+      "char-tee rw"
+    ];
+
+    # The trusted application has to be resident before anything opens a
+    # session on it, and it stays loaded only while the session that loaded it
+    # is open -- the driver unloads it the moment that closes. So one process
+    # loads it and holds it, and everything else attaches to what it holds.
+    #
+    # Loading needs /dev/teepriv0 and so needs root; the clients that follow do
+    # not. Keeping the load here rather than in fprintd is also what lets
+    # `ftharness` and fprintd coexist: the application is loaded once, by
+    # neither of them.
+    systemd.services.focal32-load = lib.mkIf cfg.fprintd {
+      description = "Hold the fingerprint trusted application loaded";
+      wantedBy = [ "multi-user.target" ];
+
+      # The application reaches its storage through the supplicant's listeners
+      # as soon as it initialises, so the supplicant has to be there first.
+      after = [
+        "systemd-udev-settle.service"
+      ]
+      ++ lib.optional cfg.supplicant.enable "ffsupplicant.service";
+      wants = lib.optional cfg.supplicant.enable "ffsupplicant.service";
+
+      # fprintd is activated on demand by D-Bus, so it is not ordered after
+      # this; what makes the ordering hold is that the application is loaded
+      # before anything can ask for a finger.
+      before = [ "fprintd.service" ];
+
+      serviceConfig = {
+        ExecStart = "${lib.getExe pkgs.ftharness} load --app ${cfg.appName}";
+
+        # /dev/teepriv0 requires CAP_SYS_ADMIN.
+        User = "root";
+
+        # The process does nothing but hold the session open, so a restart is
+        # an unload and a reload -- which is also the only way to recover if
+        # the application faults.
+        Restart = "always";
+        RestartSec = "1";
+
+        # ExecStart blocks on a signal rather than exiting, so a clean stop is
+        # SIGTERM, and exiting is what closes the session.
+        KillSignal = "SIGTERM";
+
+        StandardInput = "null";
       };
     };
   };
