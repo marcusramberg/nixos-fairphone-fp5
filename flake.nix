@@ -134,6 +134,7 @@
             ./modules/hardware
             ./modules/modem
             ./modules/qbootctl
+            ./modules/usb-signaller
           ];
         };
 
@@ -144,6 +145,7 @@
             ./modules/modem
             ./modules/gnome-mobile
             ./modules/qbootctl
+            ./modules/usb-signaller
           ];
         };
 
@@ -155,6 +157,7 @@
             ./modules/modem
             ./modules/gnome-mobile
             ./modules/qbootctl
+            ./modules/usb-signaller
           ];
         };
       };
