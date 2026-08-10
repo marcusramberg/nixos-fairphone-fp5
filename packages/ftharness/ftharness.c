@@ -333,6 +333,29 @@ static int load_app(const char *app, int *out_fd)
 	return 0;
 }
 
+/*
+ * Hold the application loaded. The driver unloads it when the load session
+ * closes, so something has to keep that session open for as long as the
+ * application is wanted -- which is what makes this usable as a service and
+ * not only as a probe. Interactively that wait is a keypress; under a service
+ * manager there is nobody to press anything and stdin is /dev/null, where a
+ * read returns end-of-file at once and would unload it immediately. Wait for a
+ * signal instead, and let the default SIGTERM disposition end it: exiting
+ * closes the session, which is the unload.
+ */
+static void hold_loaded(void)
+{
+	if (isatty(STDIN_FILENO)) {
+		printf("press enter to unload\n");
+		getchar();
+		return;
+	}
+
+	printf("holding the application loaded until terminated\n");
+	fflush(stdout);
+	pause();
+}
+
 static void dump(const void *buf, size_t len)
 {
 	const unsigned char *p = buf;
@@ -1077,8 +1100,7 @@ int main(int argc, char **argv)
 		return 1;
 
 	if (!strcmp(mode, "load")) {
-		printf("press enter to unload\n");
-		getchar();
+		hold_loaded();
 		close(priv_fd);
 		return 0;
 	}
@@ -1107,8 +1129,8 @@ int main(int argc, char **argv)
 			     rsp_size);
 
 	if (keep) {
-		printf("\nholding the application loaded, press enter to unload\n");
-		getchar();
+		printf("\n");
+		hold_loaded();
 	}
 
 	close(fd);
