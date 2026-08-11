@@ -272,6 +272,22 @@ linuxKernel.manualConfig {
       name = "dts-fp5-fingerprint-sensor";
       patch = ./patches/dts-fp5-fingerprint-sensor.patch;
     }
+    {
+      # The connector change work runs on the unfreezable system_wq, so a
+      # cable plug that wakes the phone is handled before the geni i2c
+      # controllers resume. It reaches ->connector_status(), which writes the
+      # orientation to the fsa4480 switch and the ptn36502 redriver over i2c,
+      # and the transfer is refused with -ESHUTDOWN ("Transfer while
+      # suspended") -- so the orientation is lost, not just warned about.
+      name = "ucsi-connector-change-on-freezable-wq";
+      patch = ./patches/ucsi-connector-change-on-freezable-wq.patch;
+    }
+    {
+      # Same bug on the altmode notification path, fixed upstream by Abel
+      # Vesa; not in this tree yet.
+      name = "pmic-glink-altmode-freezable-wq";
+      patch = ./patches/pmic-glink-altmode-freezable-wq.patch;
+    }
   ];
   src = kernelSrc;
 
