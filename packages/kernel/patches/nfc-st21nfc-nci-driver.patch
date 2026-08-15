@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: NixOS-Fairphone-FP5 <noreply@example.com>
-Date: Sun, 21 Jun 2026 00:00:00 +0000
+From: Marcus Ramberg <marcus@means.no>
 Subject: [PATCH] NFC: add raw-NCI/I2C driver for ST21NFCD (Fairphone 5)
 
 The Fairphone 5 NFC controller (ST21NFCD on I2C9) is a plain NCI 2.0
@@ -19,14 +17,15 @@ buffer, there is no on-module crystal) is enabled for the lifetime of
 the device. A proprietary power/field-monitor notification streamed by
 the CLF is consumed silently.
 
-Signed-off-by: NixOS-Fairphone-FP5 <noreply@example.com>
----
  drivers/nfc/Kconfig       |  11 ++
  drivers/nfc/Makefile      |   1 +
  drivers/nfc/st21nfc-nci.c | 291 +++++++++++
  3 files changed, 303 insertions(+)
  create mode 100644 drivers/nfc/st21nfc-nci.c
 
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 --- /dev/null
 +++ b/drivers/nfc/st21nfc-nci.c
 @@ -0,0 +1,291 @@

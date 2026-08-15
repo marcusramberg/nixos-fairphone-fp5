@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Marcus Ramberg <marcus.ramberg@gmail.com>
-Date: Thu, 30 Jul 2026 09:30:00 +0200
+From: Marcus Ramberg <marcus@means.no>
 Subject: [PATCH] media: i2c: imx858: fix power-on reset/clock ordering
 
 imx858_power_on() released the sensor reset (XCLR) before enabling the
@@ -16,7 +14,8 @@ Reorder to match the working s5kjn1 driver: enable regulators, enable
 MCLK, let it settle, then release reset and wait for the sensor to boot
 before the first i2c transaction.
 
-Signed-off-by: Marcus Ramberg <marcus.ramberg@gmail.com>
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
 ---
 diff --git a/drivers/media/i2c/imx858.c b/drivers/media/i2c/imx858.c
 index 5cf37c25e8e5..1d846ee948b2 100644

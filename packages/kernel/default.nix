@@ -200,6 +200,13 @@ linuxKernel.manualConfig {
       patch = ./patches/qmp-combo-apply-deferred-mode-switch.patch;
     }
     {
+      # qmp_combo_apply_mode() discards the result of qmp_combo_usb_power_on(), which
+      # can fail: it polls PHYSTATUS with a 10 ms timeout and gives up with -ETIMEDOUT
+      # if the USB3 PHY does not come out of reset.
+      name = "qmp-combo-do-not-latch";
+      patch = ./patches/qmp-combo-do-not-latch-unapplied-mode.patch;
+    }
+    {
       # msm_dp_display_send_hpd_event() used drm_helper_hpd_irq_event(), which
       # only emits a uevent when the probed connector status changed. Since
       # ->detect() is derived from link_ready and link_ready is set before the

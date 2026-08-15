@@ -1,3 +1,20 @@
+From: Marcus Ramberg <marcus@means.no>
+Subject: [PATCH] tee: qseecom: put the response area on a page boundary
+
+TZ refuses an invoke whose request is 16 bytes or more with "invalid
+argument", while the same request one byte shorter goes through and
+reaches the application. The boundary does not move with the response
+size, so what the secure world objects to is where the response begins,
+not the request's length -- and the vendor's own client lays its shared
+buffer out as a page-aligned request region followed by a page-aligned
+response region.
+
+Stage the response at a page boundary instead of immediately after the
+request.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 diff --git a/drivers/tee/qseecom/core.c b/drivers/tee/qseecom/core.c
 index 402ba887e47f..65e2dc7887ad 100644
 --- a/drivers/tee/qseecom/core.c

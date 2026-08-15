@@ -1,3 +1,21 @@
+From: Marcus Ramberg <marcus@means.no>
+Subject: [PATCH] tee: qseecom: copy the request back when it is an inout memref
+
+An application may answer in the request buffer rather than in the
+response one. The FocalTech fingerprint application writes its result
+into the request's header at +8 and sets bit 31 of the command id there
+to say it answered; the Goodix one likewise treats the buffer it was
+handed as working memory. The vendor clients see this because their
+request and response are two regions of a single shared mapping.
+
+This driver stages the request in memory of its own and copies only the
+response back, so such an answer was lost. Copy the request back too
+when the caller passes it as an inout memref, which the parameter check
+already accepts.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 diff --git a/drivers/tee/qseecom/core.c b/drivers/tee/qseecom/core.c
 index 65e2dc7887ad..db82bae611f1 100644
 --- a/drivers/tee/qseecom/core.c

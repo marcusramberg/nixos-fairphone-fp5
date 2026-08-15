@@ -1,3 +1,4 @@
+From: Marcus Ramberg <marcus@means.no>
 usb: typec: ucsi: run the connector change work on a freezable workqueue
 
 ucsi_connector_change() puts the connector work on system_wq, which is not
@@ -38,6 +39,9 @@ state read at the time it finally runs.
 The same fix has been applied to the sibling notification path in
 pmic_glink_altmode.
 
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 --- a/drivers/usb/typec/ucsi/ucsi.c
 +++ b/drivers/usb/typec/ucsi/ucsi.c
 @@ -1403,8 +1403,14 @@

@@ -1,3 +1,4 @@
+From: Marcus Ramberg <marcus@means.no>
 drm/msm/dp: notify the connector unconditionally on HPD
 
 msm_dp_display_send_hpd_event() calls drm_helper_hpd_irq_event(), which
@@ -32,6 +33,9 @@ the compositor, or shutting down, lights it up again via fbdev.
 Use drm_kms_helper_connector_hotplug_event() so the event is delivered for
 this connector whether or not a racing probe already observed the new status.
 
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 --- a/drivers/gpu/drm/msm/dp/dp_display.c
 +++ b/drivers/gpu/drm/msm/dp/dp_display.c
 @@ -15,6 +15,7 @@

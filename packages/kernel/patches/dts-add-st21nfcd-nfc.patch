@@ -1,3 +1,19 @@
+From: Marcus Ramberg <marcus@means.no>
+Subject: [PATCH] arm64: dts: qcom: qcm6490-fairphone-fp5: add the ST21NFCD NFC controller
+
+Describe the ST21NFCD NFC controller sitting on I2C9, so the raw-NCI/I2C
+driver can bind to it.
+
+The controller is at address 0x08 with a level-high interrupt on TLMM 41
+and reset on TLMM 38. There is no on-module crystal, so the reference
+clock is taken from the PMIC XO buffer (RPMH_LN_BB_CLK2). The I2C pads
+need pull-ups, which the on-board lines do not provide.
+
+Hardware details taken from the Fairphone 5 Android kernel source.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 --- a/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts	2026-06-20 17:21:56.022881118 +0200
 +++ b/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts	2026-06-20 18:35:32.105493729 +0200
 @@ -1006,6 +1008,24 @@

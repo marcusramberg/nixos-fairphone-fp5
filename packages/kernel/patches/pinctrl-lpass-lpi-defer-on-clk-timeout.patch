@@ -1,3 +1,23 @@
+From: Marcus Ramberg <marcus@means.no>
+Subject: [PATCH] pinctrl: qcom: lpass-lpi: defer probe when the clocks time out
+
+The LPASS LPI pinctrl core and audio clocks are provided by the ADSP,
+through q6prm over GLINK. If the pinctrl driver probes before the ADSP
+remoteproc has booted, clk_bulk_prepare_enable() does not return
+-EPROBE_DEFER: the clock enable request goes unanswered and times out
+with -ETIMEDOUT.
+
+dev_err_probe() then treats that as a hard failure, so the pinctrl device
+never probes again even once the ADSP is up. Everything downstream of it
+stays in deferred probe forever, which on a Fairphone 5 leaves the whole
+sound card unusable.
+
+Translate the timeout into -EPROBE_DEFER so the probe is retried after the
+ADSP has booted.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Marcus Ramberg <marcus@means.no>
+---
 diff --git a/drivers/pinctrl/qcom/pinctrl-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-lpass-lpi.c
 index 76aed3296279..06b6e57dfea7 100644
 --- a/drivers/pinctrl/qcom/pinctrl-lpass-lpi.c
