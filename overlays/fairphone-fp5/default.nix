@@ -88,5 +88,5 @@ final: prev: {
   # Adds calibrated simple-IPA profiles for:
   #   s5kjn1.yaml  - Front: Samsung S5KJN1SQ03 (Giantec GT24P128F, D-PHY)
   #   imx858.yaml  - Wide:  Sony IMX858 (Giantec GT24P128F, Dongwoon DW9800K, D-PHY)
-  libcamera = final.callPackage ../../packages/libcamera { };
+  libcamera-fp5 = final.callPackage ../../packages/libcamera { };
 }
