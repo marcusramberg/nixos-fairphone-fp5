@@ -15,21 +15,41 @@ stdenvNoCC.mkDerivation {
     hash = "sha256-8OOOzG354x/qmLwQv91C/RrQdZ2L1OyI3Q27/bgmoi0=";
   };
 
+  # The no-DP tree must actively clear the DisplayPort mixer, or a routing left
+  # behind by a previous session poisons every later speaker playback.
+  patches = [ ./clear-dp-mixer.patch ];
+
   dontBuild = true;
 
+  # Two complete UCM trees are installed:
+  #
+  #   ucm2     - no HDMI/DisplayPort device. Used whenever the DP link is down.
+  #   ucm2-dp  - adds the HDMI device on MultiMedia1. Used while DP is up.
+  #
+  # They cannot be merged into one tree: PipeWire's ACP opens the PCM of every
+  # UCM profile at WirePlumber startup, and with the link down the DP open
+  # fails inside the ADSP. MultiMedia1 is the shared DPCM frontend, so that
+  # failure also kills the built-in speaker profile and leaves only a Dummy
+  # Output. The switching is done by modules/audio (udev on DRM hotplug).
   installPhase = ''
     runHook preInstall
-    # Install the full ucm2 tree from sc7280-mainline fork
-    # (includes Fairphone/fp5/ and conf.d/qcm6490/Fairphone 5.conf)
+
     mkdir -p $out/share/alsa/
     cp -r ucm2 $out/share/alsa/
+    cp -r ucm2 $out/share/alsa/ucm2-dp
 
     # UCM2 looks up the profile by the ALSA card longname. When booting via
     # U-Boot (UEFI), the kernel gets DMI/SMBIOS tables and the ALSA core
     # appends the DMI vendor-product to the longname ("fairphone-Fairphone5"
     # instead of "Fairphone 5"), so provide the profile under both names.
-    ln -s "Fairphone 5.conf" \
-      "$out/share/alsa/ucm2/conf.d/qcm6490/fairphone-Fairphone5.conf"
+    for tree in ucm2 ucm2-dp; do
+      ln -s "Fairphone 5.conf" \
+        "$out/share/alsa/$tree/conf.d/qcm6490/fairphone-Fairphone5.conf"
+    done
+
+    install -m 0644 ${./HiFi-dp.conf} \
+      $out/share/alsa/ucm2-dp/Fairphone/fp5/HiFi.conf
+
     runHook postInstall
   '';
 
@@ -38,7 +58,8 @@ stdenvNoCC.mkDerivation {
     longDescription = ''
       Device-specific ALSA Use Case Manager configuration for the
       Fairphone 5 (Qualcomm QCM6490). Provides HiFi quality playback
-      and microphone capture configurations.
+      and microphone capture configurations, plus a second tree
+      (ucm2-dp) adding DisplayPort audio output.
 
       Fork of alsa-ucm-conf from sc7280-mainline with Fairphone 5 support.
     '';

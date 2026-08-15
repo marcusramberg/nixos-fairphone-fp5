@@ -14,6 +14,80 @@
 }:
 let
   cfg = config.nixos-fairphone-fp5.audio;
+
+  ucm = pkgs.alsa-ucm-conf-fairphone-fp5;
+
+  # Decides which UCM tree /run/alsa-ucm2 points at, and — when the answer
+  # changed — makes PipeWire's ACP re-probe it.
+  #
+  # The re-probe is done by re-announcing the sound card to udev (remove then
+  # add), *not* by restarting WirePlumber. ACP only reads the UCM tree when it
+  # creates the device, but a udev remove/add cycle recreates exactly that
+  # object while the daemon keeps running: clients keep their PipeWire
+  # connection and merely see a sink go away and come back, which is the same
+  # thing that happens when a USB DAC is unplugged. Restarting WirePlumber
+  # instead is what produced most of the trouble on this device — clients such
+  # as Blanket and FreeTube end up wedged with no streams registered, and the
+  # ADSP leaks buffers on every open/close cycle until nothing can play at all
+  # (see docs/displayport-audio.md).
+  #
+  # The deciding signal is the ELD, not the connector status: a connector can
+  # read "connected" while the link is still training or while its mode list is
+  # the fallback set, and enabling the DP UCM tree in that window produces a
+  # DisplayPort sink whose AFE port never starts ("AFE enable for port 0x6020
+  # failed -110") — or, worse, one that silently keeps playing out of the
+  # speaker. A populated ELD with sad_count >= 1 means the link is up *and* the
+  # sink advertises audio (on the XREAL One that is its "DP audio" menu option;
+  # with it off the EDID has no CEA block and no SADs at all).
+  #
+  # udev fires on `change` well before any of that settles — and it fires in
+  # bursts (a single plug of the XREAL produced seven events in ten seconds, as
+  # alt-mode negotiation flaps the connector). So: first wait for the connector
+  # status to hold still, and only then wait on the ELD.
+  dpAudioSwitch = pkgs.writeShellScript "fp5-dp-audio-switch" ''
+    set -u
+    conn=/sys/class/drm/card0-DP-1
+    eld=/proc/asound/card0/eld#4
+    tree=${ucm}/share/alsa/ucm2
+
+    # Watch for up to ~30s rather than sampling once. udev fires at the start
+    # of the plug, but the link may only train seconds later — and once the
+    # event burst is over there is no further event to re-evaluate on. The
+    # XREAL One trains well after its last udev event; a plain monitor beats
+    # the window. Sampling once means the glasses are permanently misjudged as
+    # "no DP audio", which is the whole bug this loop exists to avoid.
+    #
+    # Asymmetric on purpose:
+    #   * DP wins as soon as the link is up AND the ELD lists audio;
+    #   * no-DP is only concluded after the connector has read disconnected
+    #     continuously for ~5s, so a mid-plug flap cannot settle the answer;
+    #   * a connector that stays connected without ever producing an ELD is a
+    #     video-only sink, and falls through to no-DP when the window expires.
+    down=0
+    for _ in $(seq 60); do
+      if [ "$(cat $conn/status 2>/dev/null || true)" = "connected" ]; then
+        down=0
+        if grep -qE '^sad_count[[:space:]]+[1-9]' "$eld" 2>/dev/null; then
+          tree=${ucm}/share/alsa/ucm2-dp
+          break
+        fi
+      else
+        down=$((down + 1))
+        [ "$down" -ge 10 ] && break
+      fi
+      sleep 0.5
+    done
+
+    if [ "$(readlink /run/alsa-ucm2 || true)" = "$tree" ]; then
+      exit 0
+    fi
+
+    ln -sfnT "$tree" /run/alsa-ucm2
+
+    udevadm trigger --action=remove /sys/class/sound/card0
+    sleep 2
+    udevadm trigger --action=add /sys/class/sound/card0
+  '';
 in
 {
   options.nixos-fairphone-fp5.audio = {
@@ -71,12 +145,51 @@ in
     # Fairphone 5 UCM2 config (merged with upstream alsa-ucm-conf).
     # Without this, alsa-lib uses its hardcoded datadir which doesn't
     # include our F5/ directory.
+    #
+    # This is the mutable /run symlink, not a store path directly: it is
+    # repointed at the DisplayPort-enabled tree while DP is connected (see
+    # fp5-dp-audio-switch below).
     systemd.user.services.pipewire.environment = {
-      "ALSA_CONFIG_UCM2" = "${pkgs.alsa-ucm-conf-fairphone-fp5}/share/alsa/ucm2";
+      "ALSA_CONFIG_UCM2" = "/run/alsa-ucm2";
     };
     systemd.user.services.wireplumber.environment = {
-      "ALSA_CONFIG_UCM2" = "${pkgs.alsa-ucm-conf-fairphone-fp5}/share/alsa/ucm2";
+      "ALSA_CONFIG_UCM2" = "/run/alsa-ucm2";
     };
 
+    # Default to the no-DP tree; the switch unit corrects it at boot and on
+    # every hotplug.
+    systemd.tmpfiles.rules = [
+      "L /run/alsa-ucm2 - - - - ${ucm}/share/alsa/ucm2"
+    ];
+
+    # DRM hotplug (glasses plugged/unplugged, or DP audio toggled in their
+    # menu, which re-reads the EDID) re-evaluates which tree to use.
+    services.udev.extraRules = ''
+      ACTION=="change", SUBSYSTEM=="drm", ENV{DEVNAME}=="/dev/dri/card0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fp5-dp-audio-switch.service"
+    '';
+
+    systemd.services.fp5-dp-audio-switch = {
+      description = "Select ALSA UCM tree for DisplayPort audio";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "systemd-tmpfiles-setup.service" ];
+
+      # cat/seq/sleep/readlink/ln, grep and udevadm: units get no PATH of their
+      # own.
+      path = [
+        pkgs.coreutils
+        pkgs.gnugrep
+        pkgs.systemd
+      ];
+
+      # A plug event arrives as a burst. Without this, systemd refuses the last
+      # (and only correct) start of the burst with "start request repeated too
+      # quickly" and the tree stays wrong until the next hotplug.
+      startLimitIntervalSec = 0;
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = dpAudioSwitch;
+      };
+    };
   };
 }
