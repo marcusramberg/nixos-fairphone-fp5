@@ -1,0 +1,59 @@
+Treat a vanished UDC as 'not attached' instead of an error.
+
+A dual role controller unregisters its UDC when the Type-C port resolves to
+host: dwc3 hands a600000.usb to xhci and /sys/class/udc/a600000.usb goes away
+entirely. On the Fairphone 5 this happens whenever the phone is plugged into a
+charger rather than a host -- the gadget comes up first, then the role switch
+lands and the directory disappears underneath the daemon.
+
+wait_for_state() reads .../<udc>/state with `?`, so the missing directory is a
+hard error rather than a state, and every mode switch after that point fails:
+
+  ❌ UDC reconfiguring failed: Path does not exists:
+     /sys/class/udc/a600000.usb/state, cannot read.
+  ⚠  Failed to set default mode
+
+enable() already tolerates the unplugged case, disable() does not, and it is
+disable() that runs first on a mode switch. Nothing can be attached to a UDC
+that is not there, so let the missing node satisfy a wait for 'not attached'.
+A wait for any other state keeps polling, so a UDC that comes back (cable
+plugged into a host) is still picked up within the existing 3s window.
+
+--- a/src/gadget.rs
++++ b/src/gadget.rs
+@@ -138,14 +138,29 @@
+     }
+ 
+     fn wait_for_state(udc_name: &str, state: &str) -> anyhow::Result<()> {
++        let state_path = PathBuf::from(SYSFS_CLASS_BASE_PATH)
++            .join(UDC_PATH)
++            .join(udc_name)
++            .join(STATE_NODE);
++
+         for _n in 1..30 {
+             thread::sleep(Duration::from_millis(100));
+-            let value = sysfs_read(
+-                PathBuf::from(SYSFS_CLASS_BASE_PATH)
+-                    .join(UDC_PATH)
+-                    .join(udc_name)
+-                    .join(STATE_NODE),
+-            )?;
++
++            /*
++             * A dual role controller unregisters its UDC when the port
++             * switches to host, so the whole /sys/class/udc/<udc> directory
++             * disappears instead of the state node reading 'not attached'.
++             * Nothing can be attached to a UDC that is not there, so take
++             * the missing node as that state rather than an error.
++             */
++            if !state_path.exists() {
++                if state == "not attached" {
++                    return Ok(());
++                }
++                continue;
++            }
++
++            let value = sysfs_read(&state_path)?;
+             if value == state {
+                 return Ok(());
+             }

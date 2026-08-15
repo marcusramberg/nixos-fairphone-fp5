@@ -19,8 +19,12 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   cargoLock.lockFile = ./Cargo.lock;
 
-  # fix systemd detection on nixos
-  patches = [ ./nixos-init-detection.patch ];
+  patches = [
+    # fix systemd detection on nixos
+    ./nixos-init-detection.patch
+    # survive dwc3 unregistering its UDC on a switch to host role
+    ./udc-gone-is-not-attached.patch
+  ];
 
   postPatch = ''
     substituteInPlace src/service.rs \
