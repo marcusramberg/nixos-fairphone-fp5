@@ -1,0 +1,63 @@
+drm/msm/dp: notify the connector unconditionally on HPD
+
+msm_dp_display_send_hpd_event() calls drm_helper_hpd_irq_event(), which
+re-probes every connector on the device and only emits a uevent for the ones
+whose detected status changed.
+
+msm_dp_bridge_detect() derives the connector status from link_ready, and
+msm_dp_display_send_hpd_notification() sets link_ready before calling this
+function. A userspace probe that lands in that window sees the new status and
+updates the cached connector status itself, so by the time
+drm_helper_hpd_irq_event() runs there is no change left to report and the
+uevent is dropped.
+
+Losing that event is not cosmetic, because msm_dp_bridge_atomic_check()
+returns -ENOTCONN while link_ready is false. On a Fairphone 5, unplugging and
+replugging a DP dock reproduces it:
+
+  [drm:drm_sysfs_connector_hotplug_event] [CONNECTOR:38:DP-1] generating connector hotplug event
+  [drm:msm_dp_bridge_atomic_check] link_ready = false
+  [drm:drm_atomic_check_only] atomic driver check for 00000000fcb163f8 failed: -107
+  [drm:msm_dp_bridge_atomic_check] link_ready = false
+  [drm:drm_atomic_check_only] atomic driver check for 00000000fcb163f8 failed: -107
+  [drm:dpu_crtc_atomic_check] crtc71 -> enable 0, active 0, skip atomic_check
+  [drm:msm_dp_bridge_detect] link_ready = true
+
+The compositor commits against a connector that is not link-ready yet, gets
+-ENOTCONN, disables the CRTC, and is never told that the link came up 51 ms
+later. The connector is left reporting connected with no CRTC attached, and
+the external display stays dark until the DRM master is replaced -- stopping
+the compositor, or shutting down, lights it up again via fbdev.
+
+Use drm_kms_helper_connector_hotplug_event() so the event is delivered for
+this connector whether or not a racing probe already observed the new status.
+
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -15,6 +15,7 @@
+ #include <drm/display/drm_dp_aux_bus.h>
+ #include <drm/display/drm_hdmi_audio_helper.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_probe_helper.h>
+ 
+ #include "msm_drv.h"
+ #include "msm_kms.h"
+@@ -352,7 +353,17 @@ static void msm_dp_display_send_hpd_event(struct msm_dp *msm_dp_display)
+ 	dp = container_of(msm_dp_display, struct msm_dp_display_private, msm_dp_display);
+ 
+ 	connector = dp->msm_dp_display.connector;
+-	drm_helper_hpd_irq_event(connector->dev);
++
++	/*
++	 * Do not use drm_helper_hpd_irq_event() here: it re-probes the
++	 * connector and only emits a uevent if the detected status changed.
++	 * ->detect() is derived from link_ready, which has already been
++	 * updated by the caller, so a userspace probe racing this call latches
++	 * the new status first and the event is then suppressed -- leaving a
++	 * client that failed its modeset with -ENOTCONN with nothing to retry
++	 * on. Notify unconditionally instead.
++	 */
++	drm_kms_helper_connector_hotplug_event(connector);
+ }
+ 
+ static int msm_dp_display_send_hpd_notification(struct msm_dp_display_private *dp,

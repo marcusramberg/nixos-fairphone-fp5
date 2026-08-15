@@ -189,6 +189,28 @@ linuxKernel.manualConfig {
       patch = ./patches/dpu-dspp-reservation-fallback.patch;
     }
     {
+      # qmp_combo_typec_mux_set() drops a QMPPHY mode switch requested while
+      # the DP PHY is still powered on -- "delaying switch" is never retried.
+      # Unplugging a DP+USB3 dock leaves qmpphy_mode stuck at USB3DP; the next
+      # suspend tears the PHY down, and the following plug takes the "same
+      # qmpphy mode" early return, so the PHY is never reprogrammed. Both
+      # DisplayPort and USB3 stay dead until reboot. Apply the deferred switch
+      # from qmp_combo_dp_power_off() once the DP PHY is down.
+      name = "qmp-combo-apply-deferred-mode-switch";
+      patch = ./patches/qmp-combo-apply-deferred-mode-switch.patch;
+    }
+    {
+      # msm_dp_display_send_hpd_event() used drm_helper_hpd_irq_event(), which
+      # only emits a uevent when the probed connector status changed. Since
+      # ->detect() is derived from link_ready and link_ready is set before the
+      # call, a userspace probe racing it swallows the event. The compositor
+      # then sits on a failed -ENOTCONN modeset with no retry, and the external
+      # display stays dark until the DRM master is replaced. Notify the
+      # connector unconditionally instead.
+      name = "dp-notify-connector-unconditionally-on-hpd";
+      patch = ./patches/dp-notify-connector-unconditionally-on-hpd.patch;
+    }
+    {
       # libcamera probes the sensor sub-device for crop/native-size selection
       # targets to derive the pixel array geometry. Neither FP5 sensor answered
       # them ("the sensor kernel driver needs to be fixed"): imx858 had no
