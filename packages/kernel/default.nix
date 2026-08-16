@@ -71,6 +71,21 @@ let
   # - MISC_FOCALTECH_FP:     Owns the FP5 fingerprint sensor's reset, power and
   #                         interrupt pins. The sensor's SPI bus belongs to the
   #                         secure world, so this driver never touches it.
+  # - PM_DEBUG / PM_SLEEP_DEBUG /
+  #   PM_ADVANCED_DEBUG /
+  #   GENERIC_IRQ_DEBUGFS:  Suspend diagnostics. Without these the kernel says
+  #                         only "Wakeup pending. Abort CPU freeze" and never
+  #                         names the culprit: PM_SLEEP_DEBUG adds
+  #                         /sys/power/pm_wakeup_irq and, with
+  #                         /sys/power/pm_debug_messages set to 1, the
+  #                         "PM: Triggering wakeup from IRQ n (name)" line;
+  #                         GENERIC_IRQ_DEBUGFS exposes /sys/kernel/debug/irq so
+  #                         the wakeup-armed IRQs can be listed. Suspend on the
+  #                         FP5 both aborts (BT HCI UART 99c000.serial and the
+  #                         UCSI source power supply veto it) and, once those two
+  #                         have their power/wakeup disabled, resumes ~6ms after
+  #                         "Disabling non-boot CPUs" from an IRQ no
+  #                         power/wakeup toggle accounts for.
   nixosConfig = {
     DMIID = "y";
     U_SERIAL_CONSOLE = "y";
@@ -95,6 +110,10 @@ let
     EFI_ZBOOT = "y";
     TEE_QSEECOM = "m";
     MISC_FOCALTECH_FP = "m";
+    PM_DEBUG = "y";
+    PM_SLEEP_DEBUG = "y";
+    PM_ADVANCED_DEBUG = "y";
+    GENERIC_IRQ_DEBUGFS = "y";
   };
 
   # Render the overrides into Kconfig lines. `make oldconfig` reads .config
