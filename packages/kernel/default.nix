@@ -336,6 +336,17 @@ linuxKernel.manualConfig {
       name = "pmic-glink-altmode-freezable-wq";
       patch = ./patches/pmic-glink-altmode-freezable-wq.patch;
     }
+    {
+      # The BT UART's wakeup IRQ watches an edge on RX, and that edge latches
+      # in the PDC even while masked. The in-band sleep handshake with the
+      # Bluetooth controller happens as the port suspends, so the IRQ is
+      # already pending when dpm_suspend_noirq() arms it -- it fires at once
+      # and every suspend aborts with "Wakeup pending. Abort CPU freeze".
+      # Clear the stale edge after the port has suspended, which keeps
+      # wake-on-Bluetooth working (masking the port's wakeup does not).
+      name = "qcom-geni-serial-clear-stale-wakeup-edge";
+      patch = ./patches/qcom-geni-serial-clear-stale-wakeup-edge.patch;
+    }
   ];
   src = kernelSrc;
 
