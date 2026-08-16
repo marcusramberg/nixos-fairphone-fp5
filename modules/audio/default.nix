@@ -82,11 +82,54 @@ let
       exit 0
     fi
 
-    ln -sfnT "$tree" /run/alsa-ucm2
+    # A re-probe can come up empty: the DP link is still settling (the XREAL
+    # flaps xhci and the QMP PHY for seconds after the ELD appears), ACP's
+    # open of hw:F5,0 fails with
+    #
+    #   spa.alsa: '_ucm0029.hw:F5,0': playback open failed: Invalid argument
+    #
+    # because MultiMedia1 has no usable backend yet, and the node is never
+    # created. Nothing retries: the card object exists with no sink at all, so
+    # everything lands on Dummy Output — including the speaker, since the DP
+    # tree puts Speaker and HDMI on the same PCM. Recovery took another
+    # hotplug. So verify that the probe actually produced an ALSA sink, and
+    # re-trigger if it did not.
+    #
+    # The check is done against PipeWire itself rather than by test-opening the
+    # PCM here: a test open would race the sink PipeWire may already have open
+    # (EBUSY reads as failure), and every extra open/close cycle costs ADSP
+    # buffers that are never returned.
+    have_alsa_sink() {
+      for rt in /run/user/*; do
+        [ -S "$rt/pipewire-0" ] || continue
+        if XDG_RUNTIME_DIR="$rt" pw-dump 2>/dev/null | grep -q '"alsa_output'; then
+          return 0
+        fi
+      done
+      return 1
+    }
 
-    udevadm trigger --action=remove /sys/class/sound/card0
-    sleep 2
-    udevadm trigger --action=add /sys/class/sound/card0
+    reprobe() {
+      ln -sfnT "$1" /run/alsa-ucm2
+      udevadm trigger --action=remove /sys/class/sound/card0
+      sleep 2
+      udevadm trigger --action=add /sys/class/sound/card0
+      # ACP probes every profile of the card; on this device the sink shows up
+      # within ~3s of the add when it shows up at all.
+      sleep 5
+      have_alsa_sink
+    }
+
+    for _ in 1 2 3; do
+      reprobe "$tree" && exit 0
+    done
+
+    # Still no sink. If we were reaching for DP, fall back to the no-DP tree so
+    # the speaker works instead of leaving the user on Dummy Output; the next
+    # hotplug will try DP again.
+    if [ "$tree" != "${ucm}/share/alsa/ucm2" ]; then
+      reprobe ${ucm}/share/alsa/ucm2
+    fi
   '';
 in
 {
@@ -173,12 +216,13 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "systemd-tmpfiles-setup.service" ];
 
-      # cat/seq/sleep/readlink/ln, grep and udevadm: units get no PATH of their
-      # own.
+      # cat/seq/sleep/readlink/ln, grep, udevadm and pw-dump: units get no PATH
+      # of their own.
       path = [
         pkgs.coreutils
         pkgs.gnugrep
         pkgs.systemd
+        pkgs.pipewire
       ];
 
       # A plug event arrives as a burst. Without this, systemd refuses the last

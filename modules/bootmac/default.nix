@@ -40,6 +40,20 @@ in
         default = "hci0";
         description = "Name of the Bluetooth interface to configure.";
       };
+
+      unblockRfkill = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Clear any Bluetooth rfkill soft block after setting the MAC address.
+
+          systemd-rfkill persists the rfkill state across reboots in
+          /var/lib/systemd/rfkill, and bootmac saves and restores the state
+          around setting the MAC address. A soft block picked up once therefore
+          sticks on every subsequent boot, and BlueZ refuses to power the
+          adapter on (org.bluez.Error.Failed) without clearing rfkill first.
+        '';
+      };
     };
 
     wifi = {
@@ -103,6 +117,8 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = "${pkgs.bootmac}/bin/bootmac --bluetooth-if ${cfg.bluetooth.interface} --prefix ${cfg.macPrefix}";
+        # bootmac restores the rfkill state it saved, so unblock afterwards.
+        ExecStartPost = lib.mkIf cfg.bluetooth.unblockRfkill "${pkgs.util-linux}/bin/rfkill unblock bluetooth";
         Environment = "BT_TIMEOUT=${toString cfg.timeout}";
       };
     };
