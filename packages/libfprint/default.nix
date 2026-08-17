@@ -23,8 +23,8 @@ libfprint.overrideAttrs (old: {
   src = fetchFromGitHub {
     owner = "marcusramberg";
     repo = "libfprint";
-    rev = "a0439a5c2c15aa63c2dcf5bd9009a07e51333db5";
-    hash = "sha256-NkS9WphywVYrn1Kmjc3nQrE6z+gJ/y/M0lYYRvI/f6w=";
+    rev = "e5912e8fc5f741d787746efcc9a7a70db45808fb";
+    hash = "sha256-It402YbvPTYfE53kmCwkWRQcJ4lk/EJNWsz/9cFX8Ic=";
   };
 
   # nixpkgs carries a backport for the Realtek driver that this source is

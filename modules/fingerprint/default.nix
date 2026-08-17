@@ -162,7 +162,7 @@ in
         common.image_processing_cols = 36;
         common.image_processing_rows = 144;
         common.max_enrolling_fingers = 5;
-        common.max_enrolling_samples = 8;
+        common.max_enrolling_samples = 12;
 
         algorithm.min_enrolling_quality_threshold = 30;
         algorithm.min_enrolling_coverage_threshold = 30;
@@ -180,7 +180,7 @@ in
           common.image_processing_cols = 36;
           common.image_processing_rows = 144;
           common.max_enrolling_fingers = 5;
-          common.max_enrolling_samples = 8;
+          common.max_enrolling_samples = 12;
 
           algorithm.min_enrolling_quality_threshold = 30;
           algorithm.min_enrolling_coverage_threshold = 30;
@@ -221,10 +221,25 @@ in
         - `common.max_enrolling_fingers` -- also zero by default, which refuses
           every enrolment and leaves no template slots to load.
         - `common.max_enrolling_samples` -- how many counted samples an
-          enrolment needs. Deliberately small: the counter only falls for a
-          touch that adds new coverage while the sample cap counts every
-          accepted one, so a large value can exhaust the cap before the counter
-          reaches zero and the enrolment can never finish.
+          enrolment needs, and so how much of a finger a template ends up
+          holding. This is what decides how forgiving unlocking is: the sensor
+          is a 36 x 144 strip in the power button, each touch covers a small
+          part of a fingertip, and nothing outside what was enrolled will ever
+          match. Raise it to be able to unlock with the finger less precisely
+          placed, at the cost of a longer enrolment.
+
+          It cannot be raised freely. The counter only falls for a touch that
+          adds new coverage while the sample cap counts every accepted one, so
+          past some value the overlapping touches exhaust the cap before the
+          counter reaches zero and the enrolment can never finish -- 16 is
+          known to do this. 10 is what the vendor's own configuration uses;
+          12 is this default, and the libfprint driver gives up with an error
+          naming this key rather than asking forever if it cannot get there.
+
+          `ENROLL_STAGES` in the driver (`packages/libfprint`, the
+          `focaltechqsee` driver) is the same number, and is what the user is
+          shown as the progress denominator. Change one and change the other,
+          or the progress bar moves at the wrong rate.
         - `algorithm.min_*_threshold` -- quality and coverage floors. Zero
           accepts nothing.
         - `trustlet.enable_trusted_enrollment` -- left on, the application
