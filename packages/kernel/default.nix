@@ -163,6 +163,14 @@ linuxKernel.manualConfig {
   inherit modDirVersion;
   kernelPatches = [
     {
+      # Add patch to fix glitches on bridghtness change.
+      # Taken from this pmos issue:
+      # https://gitlab.postmarketos.org/postmarketOS/pmaports/-/work_items/4274
+      name = "fp5-dsi-skip-link-clk-cycling";
+      patch = ./patches/fp5-dsi-skip-link-clk-cycling.patch;
+    }
+    {
+      # Bluetooth HCI fix for registration on fp5
       name = "hci-qca-drop-unused-event";
       patch = ./patches/hci-qca-drop-unused-event.patch;
     }
