@@ -17,10 +17,22 @@ buffer, there is no on-module crystal) is enabled for the lifetime of
 the device. A proprietary power/field-monitor notification streamed by
 the CLF is consumed silently.
 
+The driver additionally exposes a raw-NCI character device
+(/dev/st21nfc_raw). While that node is open the driver detaches from the
+kernel NCI core -- received frames are queued to userspace instead of
+nci_recv_frame() and writes are transmitted verbatim -- so a userspace
+daemon can drive sequences the NCI core does not implement, in
+particular NFC-A listen mode / card emulation, while reusing the
+driver's clock, reset and IRQ handling. Ownership of the CLF is
+arbitrated under io_lock (which guards only the nci_up/raw_mode state,
+never the sleeping power/IRQ sequencing): the raw node refuses to open
+while nfcX is up, and the NCI core's open is refused (-EBUSY) while the
+raw node is open.
+
  drivers/nfc/Kconfig       |  11 ++
  drivers/nfc/Makefile      |   1 +
- drivers/nfc/st21nfc-nci.c | 291 +++++++++++
- 3 files changed, 303 insertions(+)
+ drivers/nfc/st21nfc-nci.c | 530 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 542 insertions(+)
  create mode 100644 drivers/nfc/st21nfc-nci.c
 
 Assisted-by: Claude:claude-opus-5
@@ -28,7 +40,7 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 ---
 --- /dev/null
 +++ b/drivers/nfc/st21nfc-nci.c
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,530 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Raw NCI over I2C driver for the STMicroelectronics ST21NFCD NFC controller
@@ -40,6 +52,14 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 + * therefore drives CORE_RESET/CORE_INIT and RF discovery directly.
 + *
 + * Modelled on drivers/nfc/nxp-nci and drivers/nfc/st-nci.
++ *
++ * In addition to the kernel NCI path, the driver exposes a "raw NCI"
++ * character device (/dev/st21nfc_raw). While that node is open the driver
++ * detaches from the NCI core: received frames are queued to userspace instead
++ * of nci_recv_frame(), and writes are transmitted verbatim to the CLF. This
++ * lets a userspace daemon drive proprietary sequences the kernel NCI core does
++ * not implement -- in particular NFC-A listen mode / card emulation -- while
++ * reusing the driver's clock, reset and IRQ handling.
 + */
 +
 +#include <linux/clk.h>
@@ -47,14 +67,25 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 +#include <linux/gpio/consumer.h>
 +#include <linux/i2c.h>
 +#include <linux/interrupt.h>
++#include <linux/miscdevice.h>
 +#include <linux/module.h>
 +#include <linux/nfc.h>
 +#include <linux/of.h>
++#include <linux/poll.h>
++#include <linux/sched.h>
++#include <linux/skbuff.h>
++#include <linux/uaccess.h>
++#include <linux/wait.h>
 +
 +#include <net/nfc/nci.h>
 +#include <net/nfc/nci_core.h>
 +
 +#define ST21NFC_NCI_DRIVER_NAME	"st21nfc_nci"
++
++/* Largest NCI frame: 3-byte control header + 255-byte payload. */
++#define ST21NFC_NCI_MAX_FRAME	(NCI_CTRL_HDR_SIZE + 255)
++/* Bound the raw RX backlog so a stalled reader cannot exhaust memory. */
++#define ST21NFC_RAW_RXQ_MAX	64
 +
 +#define ST21NFC_NCI_PROTOCOLS	(NFC_PROTO_JEWEL_MASK | \
 +				 NFC_PROTO_MIFARE_MASK | \
@@ -71,43 +102,83 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 +	struct gpio_desc *gpiod_reset;
 +	struct clk *clk;
 +
-+	bool powered;
 +	int hard_fault; /* < 0 if a fatal I2C error occurred */
++
++	/* Raw NCI passthrough character device. */
++	struct miscdevice miscdev;
++	struct mutex io_lock;		/* serialises open/close ownership */
++	bool nci_up;			/* kernel NCI core holds the CLF */
++	bool raw_mode;			/* userspace raw node holds the CLF */
++	atomic_t irq_enabled;		/* 1 while the IRQ is unmasked */
++	atomic_t raw_open;		/* single-open guard for the node */
++	struct sk_buff_head raw_rxq;	/* frames pending for userspace */
++	wait_queue_head_t raw_wait;	/* readers/pollers wait here */
 +};
 +
-+static int st21nfc_nci_open(struct nci_dev *ndev)
++/* Power the CLF up: release reset, let it boot into NCI, enable the IRQ. */
++static void st21nfc_nci_power_on(struct st21nfc_nci_phy *phy)
 +{
-+	struct st21nfc_nci_phy *phy = nci_get_drvdata(ndev);
-+
-+	if (phy->powered)
-+		return 0;
-+
 +	phy->hard_fault = 0;
 +
-+	/* Reset pulse: drive the reset/VEN line low then high to (re)start
-+	 * the CLF, then give it time to boot into NCI mode.
-+	 */
 +	gpiod_set_value_cansleep(phy->gpiod_reset, 0);
 +	usleep_range(10000, 15000);
 +	gpiod_set_value_cansleep(phy->gpiod_reset, 1);
 +	usleep_range(80000, 85000);
 +
-+	enable_irq(phy->i2c_dev->irq);
-+	phy->powered = true;
++	/* Unmask the IRQ exactly once (matched by power_off's disable). */
++	if (atomic_xchg(&phy->irq_enabled, 1) == 0)
++		enable_irq(phy->i2c_dev->irq);
++}
 +
++/* Power the CLF down: mask the IRQ and hold it in reset. */
++static void st21nfc_nci_power_off(struct st21nfc_nci_phy *phy)
++{
++	if (atomic_xchg(&phy->irq_enabled, 0) == 1)
++		disable_irq(phy->i2c_dev->irq);
++	gpiod_set_value_cansleep(phy->gpiod_reset, 0);
++}
++
++static int st21nfc_nci_open(struct nci_dev *ndev)
++{
++	struct st21nfc_nci_phy *phy = nci_get_drvdata(ndev);
++
++	mutex_lock(&phy->io_lock);
++	if (phy->raw_mode) {
++		/* The raw passthrough node owns the CLF; refuse the NCI core. */
++		mutex_unlock(&phy->io_lock);
++		return -EBUSY;
++	}
++	if (phy->nci_up) {
++		mutex_unlock(&phy->io_lock);
++		return 0;
++	}
++	phy->nci_up = true;
++	mutex_unlock(&phy->io_lock);
++
++	/*
++	 * Power sequencing (reset pulse, sleep, enable_irq) must run WITHOUT
++	 * io_lock held: it can sleep, and disabling the IRQ later is a
++	 * synchronous wait for the threaded handler. Ownership is already
++	 * claimed above, so the raw path is excluded meanwhile.
++	 */
++	st21nfc_nci_power_on(phy);
 +	return 0;
 +}
 +
 +static int st21nfc_nci_close(struct nci_dev *ndev)
 +{
 +	struct st21nfc_nci_phy *phy = nci_get_drvdata(ndev);
++	bool do_off = false;
 +
-+	if (!phy->powered)
-+		return 0;
++	mutex_lock(&phy->io_lock);
++	if (phy->nci_up) {
++		phy->nci_up = false;
++		do_off = true;
++	}
++	mutex_unlock(&phy->io_lock);
 +
-+	disable_irq(phy->i2c_dev->irq);
-+	gpiod_set_value_cansleep(phy->gpiod_reset, 0);
-+	phy->powered = false;
++	if (do_off)
++		st21nfc_nci_power_off(phy);
 +
 +	return 0;
 +}
@@ -218,15 +289,173 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 +		return IRQ_HANDLED;
 +
 +	r = st21nfc_nci_read(phy, &skb);
-+	if (r == -EREMOTEIO)
-+		phy->hard_fault = r;
-+	if (r < 0)
++	if (r < 0) {
++		if (r == -EREMOTEIO) {
++			/*
++			 * Fatal bus error. Mask the level-triggered IRQ exactly
++			 * once (nosync: we are the handler) so a stuck-high line
++			 * cannot storm until the device is closed and reopened.
++			 */
++			phy->hard_fault = r;
++			if (atomic_xchg(&phy->irq_enabled, 0) == 1)
++				disable_irq_nosync(phy->i2c_dev->irq);
++		}
 +		return IRQ_HANDLED;
++	}
++
++	/*
++	 * In raw mode the frame belongs to the userspace daemon, not the NCI
++	 * core. Queue it (dropping the oldest if the reader has stalled) and
++	 * wake any waiter.
++	 */
++	if (READ_ONCE(phy->raw_mode)) {
++		if (skb_queue_len(&phy->raw_rxq) >= ST21NFC_RAW_RXQ_MAX)
++			kfree_skb(skb_dequeue(&phy->raw_rxq));
++		skb_queue_tail(&phy->raw_rxq, skb);
++		wake_up_interruptible(&phy->raw_wait);
++		return IRQ_HANDLED;
++	}
 +
 +	nci_recv_frame(phy->ndev, skb);
 +
 +	return IRQ_HANDLED;
 +}
++
++/*
++ * Raw NCI passthrough character device.
++ *
++ * Opening the node takes the CLF away from the kernel NCI core (which must be
++ * down) and powers it on; closing it powers the CLF back down. Each read()
++ * returns exactly one NCI frame; each write() transmits one frame verbatim.
++ */
++static struct st21nfc_nci_phy *st21nfc_raw_phy(struct file *file)
++{
++	struct miscdevice *m = file->private_data;
++
++	return container_of(m, struct st21nfc_nci_phy, miscdev);
++}
++
++static int st21nfc_raw_open(struct inode *inode, struct file *file)
++{
++	struct st21nfc_nci_phy *phy = st21nfc_raw_phy(file);
++	int r;
++
++	if (atomic_cmpxchg(&phy->raw_open, 0, 1) != 0)
++		return -EBUSY;
++
++	r = mutex_lock_interruptible(&phy->io_lock);
++	if (r) {
++		atomic_set(&phy->raw_open, 0);
++		return r;
++	}
++	if (phy->nci_up) {
++		/* The kernel NCI core holds the CLF; bring nfcX down first. */
++		mutex_unlock(&phy->io_lock);
++		atomic_set(&phy->raw_open, 0);
++		return -EBUSY;
++	}
++	phy->raw_mode = true;
++	mutex_unlock(&phy->io_lock);
++
++	/* Power sequencing runs without io_lock held; see st21nfc_nci_open(). */
++	skb_queue_purge(&phy->raw_rxq);
++	st21nfc_nci_power_on(phy);
++
++	return nonseekable_open(inode, file);
++}
++
++static int st21nfc_raw_release(struct inode *inode, struct file *file)
++{
++	struct st21nfc_nci_phy *phy = st21nfc_raw_phy(file);
++
++	st21nfc_nci_power_off(phy);
++
++	mutex_lock(&phy->io_lock);
++	phy->raw_mode = false;
++	mutex_unlock(&phy->io_lock);
++
++	skb_queue_purge(&phy->raw_rxq);
++	atomic_set(&phy->raw_open, 0);
++	return 0;
++}
++
++static ssize_t st21nfc_raw_read(struct file *file, char __user *buf,
++				size_t count, loff_t *ppos)
++{
++	struct st21nfc_nci_phy *phy = st21nfc_raw_phy(file);
++	struct sk_buff *skb;
++	int r;
++
++	skb = skb_dequeue(&phy->raw_rxq);
++	while (!skb) {
++		if (file->f_flags & O_NONBLOCK)
++			return -EAGAIN;
++		r = wait_event_interruptible(phy->raw_wait,
++					     !skb_queue_empty(&phy->raw_rxq));
++		if (r)
++			return r;
++		skb = skb_dequeue(&phy->raw_rxq);
++	}
++
++	if (skb->len > count) {
++		/* Caller's buffer is too small; do not truncate a frame. */
++		skb_queue_head(&phy->raw_rxq, skb);
++		return -EINVAL;
++	}
++
++	r = skb->len;
++	if (copy_to_user(buf, skb->data, r))
++		r = -EFAULT;
++
++	kfree_skb(skb);
++	return r;
++}
++
++static ssize_t st21nfc_raw_write(struct file *file, const char __user *buf,
++				 size_t count, loff_t *ppos)
++{
++	struct st21nfc_nci_phy *phy = st21nfc_raw_phy(file);
++	u8 frame[ST21NFC_NCI_MAX_FRAME];
++	int r;
++
++	if (count < NCI_CTRL_HDR_SIZE || count > sizeof(frame))
++		return -EINVAL;
++	if (copy_from_user(frame, buf, count))
++		return -EFAULT;
++
++	r = i2c_master_send(phy->i2c_dev, frame, count);
++	if (r < 0) {
++		usleep_range(1000, 4000);
++		r = i2c_master_send(phy->i2c_dev, frame, count);
++	}
++	if (r < 0)
++		return r;
++	if (r != count)
++		return -EREMOTEIO;
++
++	return count;
++}
++
++static __poll_t st21nfc_raw_poll(struct file *file, poll_table *wait)
++{
++	struct st21nfc_nci_phy *phy = st21nfc_raw_phy(file);
++	__poll_t mask = EPOLLOUT | EPOLLWRNORM;
++
++	poll_wait(file, &phy->raw_wait, wait);
++	if (!skb_queue_empty(&phy->raw_rxq))
++		mask |= EPOLLIN | EPOLLRDNORM;
++
++	return mask;
++}
++
++static const struct file_operations st21nfc_raw_fops = {
++	.owner		= THIS_MODULE,
++	.open		= st21nfc_raw_open,
++	.release	= st21nfc_raw_release,
++	.read		= st21nfc_raw_read,
++	.write		= st21nfc_raw_write,
++	.poll		= st21nfc_raw_poll,
++};
 +
 +static int st21nfc_nci_probe(struct i2c_client *client)
 +{
@@ -245,6 +474,12 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 +
 +	phy->i2c_dev = client;
 +	i2c_set_clientdata(client, phy);
++
++	mutex_init(&phy->io_lock);
++	atomic_set(&phy->raw_open, 0);
++	atomic_set(&phy->irq_enabled, 0); /* matches IRQF_NO_AUTOEN below */
++	skb_queue_head_init(&phy->raw_rxq);
++	init_waitqueue_head(&phy->raw_wait);
 +
 +	/* Keep the CLF in reset until the NCI core opens the device. */
 +	phy->gpiod_reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
@@ -272,27 +507,43 @@ Signed-off-by: Marcus Ramberg <marcus@means.no>
 +		return r;
 +	}
 +
-+	/* IRQ stays disabled until the NCI core opens the device. */
++	/* IRQ stays disabled until the NCI core or raw node opens the device. */
 +	r = devm_request_threaded_irq(dev, client->irq, NULL,
 +				      st21nfc_nci_irq_thread_fn,
 +				      IRQF_ONESHOT | IRQF_NO_AUTOEN,
 +				      ST21NFC_NCI_DRIVER_NAME, phy);
 +	if (r < 0) {
 +		nfc_err(dev, "Unable to register IRQ handler\n");
-+		nci_unregister_device(phy->ndev);
-+		nci_free_device(phy->ndev);
-+		return r;
++		goto err_unregister;
++	}
++
++	/* Raw NCI passthrough node: /dev/st21nfc_raw. */
++	phy->miscdev.minor = MISC_DYNAMIC_MINOR;
++	phy->miscdev.name = "st21nfc_raw";
++	phy->miscdev.fops = &st21nfc_raw_fops;
++	phy->miscdev.parent = dev;
++	r = misc_register(&phy->miscdev);
++	if (r < 0) {
++		nfc_err(dev, "Unable to register raw NCI node\n");
++		goto err_unregister;
 +	}
 +
 +	return 0;
++
++err_unregister:
++	nci_unregister_device(phy->ndev);
++	nci_free_device(phy->ndev);
++	return r;
 +}
 +
 +static void st21nfc_nci_remove(struct i2c_client *client)
 +{
 +	struct st21nfc_nci_phy *phy = i2c_get_clientdata(client);
 +
++	misc_deregister(&phy->miscdev);
 +	nci_unregister_device(phy->ndev);
 +	nci_free_device(phy->ndev);
++	skb_queue_purge(&phy->raw_rxq);
 +}
 +
 +static const struct i2c_device_id st21nfc_nci_id_table[] = {
