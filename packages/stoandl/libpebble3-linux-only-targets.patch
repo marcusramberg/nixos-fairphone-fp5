@@ -1,0 +1,59 @@
+--- a/libpebble3/build.gradle.kts	2026-08-19 01:12:33.806072295 +0200
++++ b/libpebble3/build.gradle.kts	2026-08-19 01:25:46.712799051 +0200
+@@ -131,10 +131,11 @@
+         }
+     }
+ 
+-    listOf(
+-        iosX64(),
+-        iosArm64(),
+-        iosSimulatorArm64()
++    js(org.jetbrains.kotlin.gradle.plugin.KotlinJsCompilerType.IR) {
++        nodejs()
++    }
++
++    listOf<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>(
+     ).forEach { target ->
+         if (enableIosTarget) {
+             val osName = when (target.name) {
+@@ -219,11 +220,6 @@
+             }
+         }
+ 
+-        iosMain.dependencies {
+-            implementation(libs.ktor.client.darwin)
+-            implementation(libs.ktor.websockets)
+-        }
+-
+         jvmMain.dependencies {
+             implementation("com.github.hypfvieh:dbus-java-core:5.2.0")
+             implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.2.0")
+--- a/blobannotations/build.gradle.kts	2026-08-19 01:12:33.780066768 +0200
++++ b/blobannotations/build.gradle.kts	2026-08-19 01:25:46.713060217 +0200
+@@ -38,16 +38,8 @@
+ 
+     jvm()
+ 
+-    val xcfName = "libpebble-annotations"
+-
+-    iosX64 {
+-        binaries.framework { baseName = xcfName }
+-    }
+-    iosArm64 {
+-        binaries.framework { baseName = xcfName }
+-    }
+-    iosSimulatorArm64 {
+-        binaries.framework { baseName = xcfName }
++    js(org.jetbrains.kotlin.gradle.plugin.KotlinJsCompilerType.IR) {
++        nodejs()
+     }
+ 
+     sourceSets {
+@@ -56,7 +48,6 @@
+         if (enableAndroid) {
+             androidMain {}
+         }
+-        iosMain {}
+         jvmMain {}
+     }
+ }

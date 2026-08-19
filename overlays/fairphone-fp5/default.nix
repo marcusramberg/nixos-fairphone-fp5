@@ -83,6 +83,11 @@ final: prev: {
   # at runtime over usb-moded's D-Bus interface (see modules/usb-signaller).
   usb-signaller = final.callPackage ../../packages/usb-signaller { };
 
+  # Headless Pebble smartwatch companion daemon (see modules/stoandl), and the
+  # GTK4/libadwaita front-end that drives it over D-Bus.
+  stoandl = final.callPackage ../../packages/stoandl { };
+  stoandl-gui-gtk = final.callPackage ../../packages/stoandl-gui { };
+
   # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
   # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
   # Adds calibrated simple-IPA profiles for:
