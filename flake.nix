@@ -151,13 +151,12 @@
           ];
         };
 
-        # Export `gnome-mobile` as the default module.
         default = {
           imports = [
             ./modules/bootmac
             ./modules/hardware
             ./modules/modem
-            ./modules/gnome-mobile
+            ./modules/phrog
             ./modules/qbootctl
             ./modules/stoandl
             ./modules/usb-signaller
