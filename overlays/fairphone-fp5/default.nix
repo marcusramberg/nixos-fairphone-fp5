@@ -88,6 +88,9 @@ final: prev: {
   stoandl = final.callPackage ../../packages/stoandl { };
   stoandl-gui-gtk = final.callPackage ../../packages/stoandl-gui { };
 
+  # Touch-friendly greetd greeter built on Phosh (see modules/phrog).
+  phrog = final.callPackage ../../packages/phrog { };
+
   # libcamera 0.7.2 with FP5 sensor tuning files from pmaports.
   # Based on https://github.com/NixOS/nixpkgs/pull/530557 (0.7.0 -> 0.7.2).
   # Adds calibrated simple-IPA profiles for:
