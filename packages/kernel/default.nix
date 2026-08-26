@@ -11,8 +11,8 @@ let
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
-    rev = "sc7280-7.1.y";
-    hash = "sha256-Q4mFSrRUS1+RIoPpdTxHr1lg5Ba2H9EPGJB20yOnKT0=";
+    rev = "sc7280-7.2.y";
+    hash = "sha256-hNmpYLJug6XTbGQ+Y4sO7lHj9Jn38vy+g1FFVQ1nS7M=";
   };
 
   # Base kernel .config from postmarketOS for the `sc7280` chipset.
@@ -140,7 +140,7 @@ let
       lib.filterAttrs (_: v: v != "n") nixosConfig
     );
 
-  kernelVersion.string = "7.1.2";
+  kernelVersion.string = "7.2.0";
   modDirVersion = kernelVersion.string;
 in
 linuxKernel.manualConfig {
@@ -232,17 +232,6 @@ linuxKernel.manualConfig {
       # if the USB3 PHY does not come out of reset.
       name = "qmp-combo-do-not-latch";
       patch = ./patches/qmp-combo-do-not-latch-unapplied-mode.patch;
-    }
-    {
-      # msm_dp_display_send_hpd_event() used drm_helper_hpd_irq_event(), which
-      # only emits a uevent when the probed connector status changed. Since
-      # ->detect() is derived from link_ready and link_ready is set before the
-      # call, a userspace probe racing it swallows the event. The compositor
-      # then sits on a failed -ENOTCONN modeset with no retry, and the external
-      # display stays dark until the DRM master is replaced. Notify the
-      # connector unconditionally instead.
-      name = "dp-notify-connector-unconditionally-on-hpd";
-      patch = ./patches/dp-notify-connector-unconditionally-on-hpd.patch;
     }
     {
       # libcamera probes the sensor sub-device for crop/native-size selection
