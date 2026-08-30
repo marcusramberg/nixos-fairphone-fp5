@@ -49,7 +49,7 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.fingerprint;
+  cfg = config.hardware.fairphone5.fingerprint;
 
   configFile = pkgs.writeText "ff_config.json" (builtins.toJSON cfg.settings);
 
@@ -102,7 +102,7 @@ let
       cfg.firmwarePackage;
 in
 {
-  options.nixos-fairphone-fp5.fingerprint = {
+  options.hardware.fairphone5.fingerprint = {
     enable = lib.mkEnableOption ''
       reach to the Fairphone 5 fingerprint trusted application over the QSEECOM
       TEE driver. This loads the kernel driver and installs `ftharness`; it does

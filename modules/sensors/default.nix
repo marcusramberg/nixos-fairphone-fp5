@@ -14,13 +14,13 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.sensors;
+  cfg = config.hardware.fairphone5.sensors;
 in
 {
-  options.nixos-fairphone-fp5.sensors = {
+  options.hardware.fairphone5.sensors = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.hardware.fairphone5.enable;
       description = ''
         Enable sensor support (accelerometer/screen rotation) for Fairphone 5
         via iio-sensor-proxy with the Qualcomm SSC backend.

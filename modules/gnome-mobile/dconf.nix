@@ -5,10 +5,10 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.gnome-mobile;
+  cfg = config.hardware.fairphone5.gnome-mobile;
 in
 {
-  options.nixos-fairphone-fp5.gnome-mobile = {
+  options.hardware.fairphone5.gnome-mobile = {
     defaultWallpaper = {
       enable = lib.mkOption {
         type = lib.types.bool;

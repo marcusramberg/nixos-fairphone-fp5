@@ -27,7 +27,7 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.usb-signaller;
+  cfg = config.hardware.fairphone5.usb-signaller;
 
   settingsFormat = pkgs.formats.toml { };
   configFile = settingsFormat.generate "usb-signaller.toml" cfg.settings;
@@ -124,7 +124,7 @@ let
   };
 in
 {
-  options.nixos-fairphone-fp5.usb-signaller = {
+  options.hardware.fairphone5.usb-signaller = {
     enable = lib.mkEnableOption ''
       usb-signaller, which composes and switches the USB gadget: NCM ethernet
       for developer and tethering modes, mass storage, MTP and charging-only,
@@ -234,10 +234,10 @@ in
         assertion =
           (cfg.developerMode.enable || cfg.tetheringMode.enable) -> config.networking.networkmanager.enable;
         message = ''
-          nixos-fairphone-fp5.usb-signaller: the developer and tethering mode
+          hardware.fairphone5.usb-signaller: the developer and tethering mode
           services configure the USB ethernet interface through NetworkManager,
           so networking.networkmanager.enable must be on. Turn off
-          nixos-fairphone-fp5.usb-signaller.developerMode.enable and
+          hardware.fairphone5.usb-signaller.developerMode.enable and
           .tetheringMode.enable to use the gadget without them.
         '';
       }
@@ -250,7 +250,7 @@ in
       "usb_f_ncm"
     ];
 
-    nixos-fairphone-fp5.usb-signaller.settings.main.default_mode = lib.mkDefault cfg.defaultMode;
+    hardware.fairphone5.usb-signaller.settings.main.default_mode = lib.mkDefault cfg.defaultMode;
 
     # The UAPI search looks for the main file at <root>/<project>/<name>, so
     # this is /etc/usb-signaller/usb-signaller.toml and not

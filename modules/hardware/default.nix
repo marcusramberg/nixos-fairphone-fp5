@@ -5,10 +5,20 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.hardware;
+  cfg = config.hardware.fairphone5;
 in
 {
-  options.nixos-fairphone-fp5.hardware = {
+  options.hardware.fairphone5 = {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Enable the Fairphone 5 hardware module: the custom kernel, device
+        tree, firmware, and boot configuration. The module is inert unless
+        this is set.
+      '';
+    };
+
     serial = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -42,7 +52,7 @@ in
     ./disk-image.nix
   ];
 
-  config = {
+  config = lib.mkIf cfg.enable {
     # Apply the Fairphone FP5 overlay.
     nixpkgs.overlays = [
       (import ../../overlays/fairphone-fp5)

@@ -7,13 +7,13 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.qbootctl;
+  cfg = config.hardware.fairphone5.qbootctl;
 in
 {
-  options.nixos-fairphone-fp5.qbootctl = {
+  options.hardware.fairphone5.qbootctl = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.hardware.fairphone5.enable;
       description = ''
         Enable marking the current A/B boot slot as successful at boot via
         qbootctl, preventing the slot from being marked unbootable.

@@ -13,7 +13,7 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.audio;
+  cfg = config.hardware.fairphone5.audio;
 
   ucm = pkgs.alsa-ucm-conf-fairphone-fp5;
 
@@ -133,10 +133,10 @@ let
   '';
 in
 {
-  options.nixos-fairphone-fp5.audio = {
+  options.hardware.fairphone5.audio = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.hardware.fairphone5.enable;
       description = ''
         Enable audio support for Fairphone 5.
 

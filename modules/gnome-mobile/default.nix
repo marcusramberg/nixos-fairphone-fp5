@@ -5,10 +5,10 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.gnome-mobile;
+  cfg = config.hardware.fairphone5.gnome-mobile;
 in
 {
-  options.nixos-fairphone-fp5.gnome-mobile = {
+  options.hardware.fairphone5.gnome-mobile = {
     installDefaultApps = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -229,7 +229,7 @@ in
     programs.calls.enable = cfg.installDefaultApps;
 
     # Ensure ModemManager is started before NetworkManager.
-    systemd.services.ModemManager = lib.mkIf config.nixos-fairphone-fp5.modem.enable {
+    systemd.services.ModemManager = lib.mkIf config.hardware.fairphone5.modem.enable {
       aliases = [ "dbus-org.freedesktop.ModemManager1.service" ];
       wantedBy = [ "NetworkManager.service" ];
       partOf = [ "NetworkManager.service" ];

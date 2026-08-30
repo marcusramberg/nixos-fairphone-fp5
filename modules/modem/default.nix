@@ -15,13 +15,13 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.modem;
+  cfg = config.hardware.fairphone5.modem;
 in
 {
-  options.nixos-fairphone-fp5.modem = {
+  options.hardware.fairphone5.modem = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.hardware.fairphone5.enable;
       description = ''
         Enable Qualcomm modem support for Fairphone 5.
 

@@ -20,10 +20,10 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.stoandl;
+  cfg = config.programs.stoandl;
 in
 {
-  options.nixos-fairphone-fp5.stoandl = {
+  options.programs.stoandl = {
     enable = lib.mkEnableOption ''
       stoandl, the headless Pebble smartwatch companion daemon, as a systemd
       user service bridging desktop notifications, music, weather, calendar
@@ -81,7 +81,7 @@ in
       {
         assertion = config.hardware.bluetooth.enable;
         message = ''
-          nixos-fairphone-fp5.stoandl: the daemon reaches the watch through
+          programs.stoandl: the daemon reaches the watch through
           BlueZ (BLE, or RFCOMM for classic-era watches), so
           hardware.bluetooth.enable must be on.
         '';

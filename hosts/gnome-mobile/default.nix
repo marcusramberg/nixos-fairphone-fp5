@@ -9,10 +9,12 @@
     ../../modules/qbootctl
   ];
 
+  hardware.fairphone5.enable = true;
+
   networking.hostName = "fairphone";
 
   # Enable Qualcomm modem support.
-  nixos-fairphone-fp5.modem.enable = true;
+  hardware.fairphone5.modem.enable = true;
 
   # Enable experimental Nix features (flakes).
   nix.settings.experimental-features = [

@@ -14,13 +14,13 @@
   ...
 }:
 let
-  cfg = config.nixos-fairphone-fp5.bootmac;
+  cfg = config.hardware.fairphone5.bootmac;
 in
 {
-  options.nixos-fairphone-fp5.bootmac = {
+  options.hardware.fairphone5.bootmac = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.hardware.fairphone5.enable;
       description = ''
         Enable bootmac to configure MAC addresses at boot.
       '';

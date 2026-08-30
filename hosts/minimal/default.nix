@@ -5,6 +5,8 @@
     ../../modules/qbootctl
   ];
 
+  hardware.fairphone5.enable = true;
+
   networking.hostName = "fairphone";
 
   # Enable experimental Nix features (flakes).
