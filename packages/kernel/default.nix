@@ -11,8 +11,8 @@ let
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
-    rev = "sc7280-7.2.y";
-    hash = "sha256-hNmpYLJug6XTbGQ+Y4sO7lHj9Jn38vy+g1FFVQ1nS7M=";
+    tag = "v7.2.2-sc7280";
+    hash = "sha256-4ZLPc03E/4Dp9xIkL1qBIL37bEoeO/9UeHosewCFDaM=";
   };
 
   # Base kernel .config from postmarketOS for the `sc7280` chipset.
@@ -140,7 +140,7 @@ let
       lib.filterAttrs (_: v: v != "n") nixosConfig
     );
 
-  kernelVersion.string = "7.2.0";
+  kernelVersion.string = "7.2.2";
   modDirVersion = kernelVersion.string;
 in
 linuxKernel.manualConfig {
