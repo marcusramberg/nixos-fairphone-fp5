@@ -35,7 +35,8 @@
 #
 # It is still not a fingerprint stack: nothing here enrols or matches. Enrolment
 # additionally needs the application's secure storage, which it reaches over
-# RPMB through a supplicant -- see packages/ffsupplicant.
+# RPMB through a supplicant -- see the ffsupplicant tool in
+# https://github.com/marcusramberg/fp5-fingerprint-tools.
 #
 # The trusted application is proprietary and ships in no public firmware set:
 # FairBlobs/FP5-firmware carries adsp, cdsp, modem, wpss and the GPU zap

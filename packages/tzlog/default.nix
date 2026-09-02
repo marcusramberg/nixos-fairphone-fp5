@@ -1,13 +1,14 @@
 {
   lib,
   stdenv,
+  fp5-fingerprint-tools,
   kernel,
 }:
 stdenv.mkDerivation {
   pname = "qcom-tzlog";
   version = "0.1.0";
 
-  src = ./.;
+  src = "${fp5-fingerprint-tools}/tzlog";
 
   nativeBuildInputs = kernel.moduleBuildDependencies;
 

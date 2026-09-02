@@ -1,5 +1,14 @@
 # Nixpkgs overlay to add custom Fairphone 5 packages.
 final: prev: {
+  # Sources for the fingerprint tools below. Kept in their own repository
+  # because nothing in them is NixOS-specific; only the packaging lives here.
+  fp5-fingerprint-tools = final.fetchFromGitHub {
+    owner = "marcusramberg";
+    repo = "fp5-fingerprint-tools";
+    rev = "d9320448e575c2e219b1100655d0465b09f58d92";
+    hash = "sha256-JWwvcnRp+bX3d6qdvM82p4E3O9UNTfZ89xUk89Qu/Yg=";
+  };
+
   # Qualcomm firmware squasher to convert split `.mdt` (meta data table) firmware files
   # to monolithic `.mbn` (multi-binary) format. Note: This is a build-time tool that
   # runs during firmware preparation (not on the device).

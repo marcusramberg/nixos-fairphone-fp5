@@ -1,12 +1,13 @@
 {
   lib,
   stdenv,
+  fp5-fingerprint-tools,
 }:
 stdenv.mkDerivation {
   pname = "ffsupplicant";
   version = "0.1.0";
 
-  src = ./.;
+  src = "${fp5-fingerprint-tools}/ffsupplicant";
 
   dontConfigure = true;
 
