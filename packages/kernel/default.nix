@@ -68,6 +68,9 @@ let
   #                         through the TEE subsystem. Needed to reach the FP5
   #                         fingerprint TA. Deps QCOM_QSEECOM, QCOM_MDT_LOADER
   #                         and TEE are already set in the pmOS base config.
+  # - VIDEO_IMX800:         Third FP5 sensor (camera@1a). camss only registers
+  #                         subdev nodes once every DT sensor has bound, so
+  #                         without it libcamera enumerates no cameras at all.
   # - MISC_FOCALTECH_FP:     Owns the FP5 fingerprint sensor's reset, power and
   #                         interrupt pins. The sensor's SPI bus belongs to the
   #                         secure world, so this driver never touches it.
@@ -110,6 +113,7 @@ let
     EFI_ZBOOT = "y";
     TEE_QSEECOM = "m";
     MISC_FOCALTECH_FP = "m";
+    VIDEO_IMX800 = "m";
     PM_DEBUG = "y";
     PM_SLEEP_DEBUG = "y";
     PM_ADVANCED_DEBUG = "y";
