@@ -47,6 +47,7 @@ in
 
   imports = [
     ../audio
+    ../camera
     ../fingerprint
     ../sensors
     ./disk-image.nix
