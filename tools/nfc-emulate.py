@@ -29,6 +29,9 @@ import sys
 import time
 
 DEV = "/dev/st21nfc_raw"
+# First byte must not be 0x08 (ISO 14443-3 reserves it for random IDs -- the
+# CLF regenerates the UID on every activation) nor 0x88 (cascade tag).
+DEFAULT_UID = [0x04, 0x11, 0x22, 0x33]
 
 # NCI message types (top 3 bits of byte 0)
 MT_CMD = 0x20
@@ -62,6 +65,24 @@ LA_NFCID1 = 0x33
 
 STATUS_OK = 0x00
 
+# Type-2 tag commands (arrive as NCI data packets on conn 0 via the Frame RF
+# interface; the NFCC handles CRC in both directions).
+T2T_READ = 0x30
+T2T_WRITE = 0xA2
+T2T_SECTOR_SEL = 0xC2
+T2T_ACK = 0x0A
+T2T_NAK = 0x00
+
+
+def t2t_image(uid):
+    """64-byte static Type-2 memory: UID/BCC, CC, and an empty NDEF TLV."""
+    mem = bytearray(64)
+    mem[0:4] = bytes(uid[:4])
+    mem[4] = uid[0] ^ uid[1] ^ uid[2] ^ uid[3]
+    mem[12:16] = bytes([0xE1, 0x10, 0x06, 0x00])  # CC: NDEF, v1.0, 48 bytes, RW
+    mem[16:19] = bytes([0x03, 0x00, 0xFE])  # empty NDEF TLV + terminator
+    return mem
+
 
 def hx(b):
     return " ".join("%02x" % x for x in b)
@@ -76,6 +97,12 @@ class Clf:
 
     def close(self):
         os.close(self.fd)
+
+    def send_data(self, payload, conn=0):
+        frame = bytes([conn, 0x00, len(payload)]) + bytes(payload)
+        if self.verbose:
+            print("TX data %s" % hx(frame))
+        os.write(self.fd, frame)
 
     def send(self, mt, gid, oid, payload=b""):
         hdr = bytes([mt | gid, oid, len(payload)])
@@ -167,8 +194,6 @@ def set_listen_config(clf, uid=None):
     tlv(LA_PLATFORM_CONFIG, bytes([0x00]))
     tlv(LA_SEL_INFO, bytes([0x00]))
     if uid is not None:
-        # NFCID1: 4, 7 or 10 bytes. A 4-byte fixed UID should normally start
-        # 0x08 per NFC Forum; the CLF may enforce this.
         tlv(LA_NFCID1, bytes(uid))
 
     payload = bytes([len(params)]) + b"".join(params)
@@ -195,6 +220,26 @@ def rf_discover_listen(clf):
     print("RF_DISCOVER (listen NFC-A) started")
 
 
+def t2t_respond(clf, mem, p):
+    if not p:
+        return
+    cmd = p[0]
+    if cmd == T2T_READ and len(p) >= 2:
+        # READ returns 4 blocks, wrapping at the end of the memory area.
+        start = (p[1] * 4) % len(mem)
+        clf.send_data(bytes(mem[(start + i) % len(mem)] for i in range(16)))
+    elif cmd == T2T_WRITE and len(p) >= 6:
+        off = (p[1] * 4) % len(mem)
+        mem[off:off + 4] = p[2:6]
+        clf.send_data(bytes([T2T_ACK]))
+    elif cmd == T2T_SECTOR_SEL:
+        clf.send_data(bytes([T2T_NAK]))
+    else:
+        # Stay silent rather than NAK: a NAK makes the reader retransmit, and
+        # an unknown command is more likely us mis-framing than a real error.
+        print("unhandled T2T cmd %s" % hx(p))
+
+
 def parse_uid(s):
     parts = s.replace(":", " ").split()
     return [int(p, 16) for p in parts]
@@ -202,13 +247,12 @@ def parse_uid(s):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--uid", type=parse_uid, default=None,
-                    help="NFCID1 to present, e.g. 08:aa:bb:cc (default: CLF random)")
+    # Fixed by default: a door reader has to enrol a stable UID, and a random
+    # one would change on every activation.
+    ap.add_argument("--uid", type=parse_uid, default=DEFAULT_UID,
+                    help="NFCID1 to present, e.g. 08:aa:bb:cc")
     ap.add_argument("--verbose", action="store_true", help="dump raw NCI traffic")
     args = ap.parse_args()
-
-    if os.geteuid() != 0:
-        sys.exit("must run as root (raw NCI node)")
 
     try:
         clf = Clf(verbose=args.verbose)
@@ -225,17 +269,28 @@ def main():
         set_listen_config(clf, uid=args.uid)
         rf_discover_listen(clf)
 
-        print("Listening. Present phone to a reader (Ctrl-C to stop)...")
+        print("Listening as UID %s. Present phone to a reader (Ctrl-C to stop)..."
+              % hx(args.uid))
+        mem = t2t_image(args.uid)
         while True:
             f = clf.recv(timeout=5.0)
             if f is None:
                 continue
             mt, gid, oid = f[0] & 0xE0, f[0] & 0x0F, f[1]
+            if mt == 0x00:
+                t2t_respond(clf, mem, f[3:])
+                continue
             if gid == GID_PROP:
+                # A reader that only takes the UID is answered by the CLF's own
+                # anticollision, so this field/power monitor stream is the only
+                # sign anything happened.
+                print("[%.3f] prop %s" % (time.monotonic(), hx(f)))
                 continue
             if mt == MT_NTF and gid == GID_RF and oid == RF_INTF_ACTIVATED:
                 print(">>> ACTIVATED in listen mode (reader selected us)")
                 print("    %s" % hx(f))
+            elif mt == MT_NTF and gid == GID_CORE and oid == 0x06:
+                continue  # CORE_CONN_CREDITS_NTF
             elif mt == MT_NTF and gid == GID_RF and oid == RF_DEACTIVATE:
                 print("<<< deactivated (reader left field)")
             else:

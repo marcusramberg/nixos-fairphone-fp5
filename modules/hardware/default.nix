@@ -6,6 +6,47 @@
 }:
 let
   cfg = config.hardware.fairphone5;
+
+  nfcEmulateIcon = pkgs.fetchurl {
+    url = "https://hackeriet.no/comotion-sjn-transparent-1.2.svg";
+    hash = "sha256-kvNwJKE6DyGg+wechBSDI80XkVetTWYgtccK7bz/xrc=";
+  };
+
+  nfcEmulationEnabled = cfg.nfcEmulationUid != null || cfg.nfcEmulationUidFile != null;
+
+  nfcEmulateUid =
+    if cfg.nfcEmulationUidFile != null then
+      ''"$(${pkgs.coreutils}/bin/cat ${cfg.nfcEmulationUidFile})"''
+    else
+      cfg.nfcEmulationUid;
+
+  nfcEmulateRun = pkgs.writeShellScript "nfc-emulate-30s" ''
+    ${pkgs.libnotify}/bin/notify-send -i nfc-badge "NFC badge" \
+      "Presenting your card for 30 seconds"
+    ${pkgs.coreutils}/bin/timeout 30 \
+      ${pkgs.python3}/bin/python3 ${../../tools/nfc-emulate.py} \
+        --uid ${nfcEmulateUid}
+    ${pkgs.libnotify}/bin/notify-send -i nfc-badge "NFC badge" "Stopped"
+  '';
+
+  nfcEmulateApp = pkgs.symlinkJoin {
+    name = "nfc-badge";
+    paths = [
+      (pkgs.makeDesktopItem {
+        name = "nfc-badge";
+        desktopName = "NFC Badge";
+        comment = "Present the phone as an NFC card for 30 seconds";
+        exec = "${nfcEmulateRun}";
+        icon = "nfc-badge";
+        terminal = false;
+        categories = [ "Utility" ];
+      })
+      (pkgs.runCommand "nfc-badge-icon" { } ''
+        install -Dm444 ${nfcEmulateIcon} \
+          $out/share/icons/hicolor/scalable/apps/nfc-badge.svg
+      '')
+    ];
+  };
 in
 {
   options.hardware.fairphone5 = {
@@ -16,6 +57,31 @@ in
         Enable the Fairphone 5 hardware module: the custom kernel, device
         tree, firmware, and boot configuration. The module is inert unless
         this is set.
+      '';
+    };
+
+    nfcEmulationUid = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "04:11:22:33";
+      description = ''
+        Present the phone as an NFC-A tag with this fixed NFCID1, for door
+        readers that authorise on UID alone. Null disables card emulation.
+
+        The first byte must not be 0x08 -- ISO 14443-3 reserves it for random
+        IDs, and the CLF then generates a new UID on every activation.
+      '';
+    };
+
+    nfcEmulationUidFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = "/run/agenix/nfc-uid";
+      description = ''
+        Read the NFCID1 from this file at runtime instead of baking it into
+        the Nix store, for use with agenix or similar. Takes precedence over
+        {option}`nfcEmulationUid`. The file must be readable by the user
+        launching the badge app.
       '';
     };
 
@@ -243,7 +309,18 @@ in
 
     # Enable neard for NFC support
     services.neard.enable = true;
-    environment.systemPackages = with pkgs; [ neard ];
+    environment.systemPackages = [
+      pkgs.neard
+    ]
+    ++ lib.optionals nfcEmulationEnabled [ nfcEmulateApp ];
+
+    # Card emulation, launched on demand from the app grid for 30 seconds.
+    # It holds the CLF in listen mode, which blocks tag *reading* for as long
+    # as it runs (the kernel NCI device cannot come up while /dev/st21nfc_raw
+    # is open), hence the timeout rather than a permanent service.
+    services.udev.extraRules = lib.mkIf nfcEmulationEnabled ''
+      KERNEL=="st21nfc_raw", GROUP="users", MODE="0660"
+    '';
 
     # Set getty on both serial consoles for login.
     #
