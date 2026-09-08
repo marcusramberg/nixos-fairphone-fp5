@@ -165,7 +165,9 @@ stdenv.mkDerivation rec {
     install -Dm644 ${./tuning/s5kjn1.yaml} \
       "$out"/share/libcamera/ipa/simple/s5kjn1.yaml
     install -Dm644 ${./tuning/imx858.yaml} \
-      "$out"/share/libcamera/ipa/simple/imx858.yaml
+      "$out"/share/libcamera/ipa/simple/imx858.yaml \
+    install -Dm644 ${./tuning/imx800.yaml} \
+      "$out"/share/libcamera/ipa/simple/imx800.yaml
   '';
 
   meta = {
@@ -173,7 +175,7 @@ stdenv.mkDerivation rec {
     homepage = "https://libcamera.org";
     changelog = "https://git.libcamera.org/libcamera/libcamera.git/tag/?h=${src.rev}";
     license = lib.licenses.lgpl2Plus;
-    maintainers = with lib.maintainers; [ ];
+    maintainers = with lib.maintainers; [ marcusramberg ];
     platforms = lib.platforms.linux;
     badPlatforms = [
       # Mandatory shared libraries.
