@@ -30,7 +30,8 @@ rustPlatform.buildRustPackage (finalAttrs: {
     hash = "sha256-ojr5k6eYONMNDk/DwWU6RxCDv9TrnUskFqL+2X0DIT0=";
   };
 
-  cargoLock.lockFile = ./Cargo.lock;
+  #  cargoLock.lockFile = ./Cargo.lock;
+  cargoHash = "sha256-0iUemQZzXLu6VfTKj+ov7DZH3u/6aiQziTKok3E0SXg=";
 
   nativeBuildInputs = [
     pkg-config
