@@ -17,7 +17,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     hash = "sha256-c4wI6sHHiCad18t62dD9SEgdmoo0S+BO22wUGytIJ0Q=";
   };
 
-  cargoLock.lockFile = ./Cargo.lock;
+  cargoHash = "sha256-cmsxh7ZjU4z2LvwsnqZNlS5P9aeL05eZrg+mPDR9ShQ=";
 
   patches = [
     # fix systemd detection on nixos
