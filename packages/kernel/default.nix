@@ -7,11 +7,15 @@
   ...
 }:
 let
-  # Kernel source from `sc7280-mainline` repository.
+  # Kernel source from `sc7280-mainline` repository. Fetched over git (not the
+  # GitHub archive endpoint) because the ~200 MB tarball keeps tripping
+  # GitHub's unauthenticated abuse rate limiter (HTTP 429).
   kernelSrc = fetchFromGitHub {
     owner = "sc7280-mainline";
     repo = "linux";
     tag = "v7.2.2-sc7280";
+    forceFetchGit = true;
+    name = "linux-sc7280-src";
     hash = "sha256-4ZLPc03E/4Dp9xIkL1qBIL37bEoeO/9UeHosewCFDaM=";
   };
 
