@@ -4,12 +4,23 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # DankMaterialShell mobile fork; provides the DMS package. The NixOS
+    # module (`programs.dms-shell`) comes from nixpkgs.
+    dms = {
+      url = "github:marcusramberg/DankMaterialShell/mobile";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    springchick = {
+      url = "github:marcusramberg/springchick";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
       flake-utils,
+      dms,
       ...
     }:
     let
@@ -72,10 +83,16 @@
 
         # NixOS configurations for building example images for testing.
         exampleNixosConfigurations = {
-          gnome-mobile = nixpkgs.lib.nixosSystem {
+          dmsmobile = nixpkgs.lib.nixosSystem {
             inherit system;
 
-            modules = [ ./hosts/gnome-mobile ];
+            modules = [
+              ./hosts/dmsmobile
+              {
+                programs.dms-shell.package = dms.packages.${system}.default;
+
+              }
+            ];
             pkgs = exampleConfigPkgs;
           };
           minimal = nixpkgs.lib.nixosSystem {
